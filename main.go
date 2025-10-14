@@ -1,0 +1,257 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+
+	"golang.org/x/oauth2"
+	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/joho/godotenv"
+	"crypto/rand"
+	"encoding/base64"
+)
+
+// Add `github.com/joho/godotenv` to your imports.
+var (
+	clientID     string
+	clientSecret string
+	redirectURL  string
+	providerURL  string
+
+	provider     *oidc.Provider
+	oidcConfig   *oidc.Config
+	oauth2Config *oauth2.Config
+
+	states = make(map[string]bool) // In-memory state store for demo purposes
+)
+
+type User struct {
+    Email   string `json:"email"`
+    Name    string `json:"name"`
+    Subject string `json:"sub"`
+}
+
+func generateState() (string, error) {
+    b := make([]byte, 32)
+    _, err := rand.Read(b)
+    if err != nil {
+        return "", err
+    }
+    return base64.URLEncoding.EncodeToString(b), nil
+}
+
+func init() {
+	// Load .env (optional). If .env is absent, we simply fall back to existing env vars.
+	_ = godotenv.Load()
+
+	clientID = os.Getenv("OIDC_CLIENT_ID")
+	clientSecret = os.Getenv("OIDC_CLIENT_SECRET")
+
+	if v := os.Getenv("REDIRECT_URL"); v != "" {
+		redirectURL = v
+	}
+
+	if clientID == "" || clientSecret == "" {
+		log.Fatal("OIDC_CLIENT_ID and OIDC_CLIENT_SECRET must be set")
+	}
+
+	providerURL = os.Getenv("OIDC_ISSUER_URL")
+	if providerURL == "" {
+		log.Fatal("OIDC_ISSUER_URL must be set")
+	}
+
+	redirectURL = os.Getenv("REDIRECT_URL")
+	if redirectURL == "" {
+		redirectURL = "http://localhost:8080/callback"
+	}
+}
+
+func main() {
+	ctx := context.Background()
+
+	var err error
+	// Discover OIDC configuration
+	provider, err = oidc.NewProvider(ctx, providerURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	oidcConfig = &oidc.Config{
+		ClientID: clientID,
+	}
+
+	// OAuth2 config
+	oauth2Config = &oauth2.Config{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		Endpoint:     provider.Endpoint(),
+		RedirectURL:  redirectURL,
+		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+	}
+
+	http.HandleFunc("/", handleHome)
+	http.HandleFunc("/login", handleLogin)
+	http.HandleFunc("/callback", handleCallback)
+	http.Handle("/dashboard", AuthMiddleware(http.HandlerFunc(handleDashboard)))
+
+	fmt.Println("Server started at http://localhost:8080")
+	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+func handleHome(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, `<a href="/login">Log in with OIDC</a>`)
+}
+
+func handleLogin(w http.ResponseWriter, r *http.Request) {
+	
+	state, err := generateState()
+	if err != nil {
+		http.Error(w, "Failed to generate state: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Save the state in the in-memory store
+	states[state] = true
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "oauth_state",
+		Value:    state,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false, // set false for localhost dev
+		MaxAge:   300,  // 5 minutes
+	})
+
+	http.Redirect(w, r, oauth2Config.AuthCodeURL(state), http.StatusFound)
+}
+
+func handleCallback(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Verify state
+	cookie, err := r.Cookie("oauth_state")
+	if err != nil {
+		http.Error(w, "State cookie not found", http.StatusBadRequest)
+		return
+	}
+	if r.URL.Query().Get("state") != cookie.Value {
+		http.Error(w, "Invalid state parameter", http.StatusBadRequest)
+		return
+	}
+
+	// Check if state exists in the in-memory store and is valid
+	if _, exists := states[cookie.Value]; !exists {
+		http.Error(w, "Invalid or expired state parameter", http.StatusBadRequest)
+		return
+	}
+	// Remove the state from the store to prevent reuse
+	delete(states, cookie.Value)
+
+	// Clear state cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "oauth_state",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false, // set false for localhost dev
+		MaxAge:   -1,
+	})
+
+	// Parse the authorization code and exchange it for a token
+	code := r.URL.Query().Get("code")
+	oauth2Token, err := oauth2Config.Exchange(ctx, code)
+	if err != nil {
+		http.Error(w, "Failed to exchange token: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Extract ID Token from OAuth2 token
+	rawIDToken, ok := oauth2Token.Extra("id_token").(string)
+	if !ok {
+		http.Error(w, "No id_token field in oauth2 token", http.StatusInternalServerError)
+		return
+	}
+
+	// Parse and verify ID Token
+	verifier := provider.Verifier(oidcConfig)
+	idToken, err := verifier.Verify(ctx, rawIDToken)
+	if err != nil {
+		http.Error(w, "Failed to verify ID token: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Extract claims (e.g. email, name)
+	var claims struct {
+		Email         string `json:"email"`
+		EmailVerified bool   `json:"email_verified"`
+		Name          string `json:"name"`
+		Picture       string `json:"picture"`
+	}
+
+	if err := idToken.Claims(&claims); err != nil {
+		http.Error(w, "Failed to parse claims: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Set ID Token in a secure cookie (for demo purposes, not HttpOnly)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "id_token",
+		Value:    rawIDToken,
+		Path:     "/",
+		HttpOnly: false,
+		Secure:   false, // set false for localhost dev
+		MaxAge:   3600,  // 1 hour
+	})
+
+	http.Redirect(w, r, "/dashboard", http.StatusFound)
+}
+
+func handleDashboard(w http.ResponseWriter, r *http.Request) {
+	user := r.Context().Value("user").(User)
+	fmt.Fprintf(w, "Welcome, %s!", user.Name)
+}
+
+
+
+func AuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("id_token")
+		if err != nil || cookie.Value == "" {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+
+		// Verify token
+		ctx := r.Context()
+		verifier := provider.Verifier(oidcConfig)
+
+		idToken, err := verifier.Verify(ctx, cookie.Value)
+		if err != nil {
+			http.Redirect(w, r, "/login", http.StatusFound)
+			return
+		}
+
+		// Extract claims from idToken
+		var claims struct {
+			Email   string `json:"email"`
+			Name    string `json:"name"`
+			Subject string `json:"sub"`
+		}
+
+		if err := idToken.Claims(&claims); err != nil {
+			http.Error(w, "Failed to parse claims", http.StatusInternalServerError)
+			return
+		}
+
+		// Add user info to context
+		ctx = context.WithValue(r.Context(), "user", User{
+			Email:   claims.Email,
+			Name:    claims.Name,
+			Subject: claims.Subject,
+		})
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
