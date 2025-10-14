@@ -7,11 +7,16 @@ import (
 	"net/http"
 	"os"
 
-	"golang.org/x/oauth2"
-	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/joho/godotenv"
 	"crypto/rand"
 	"encoding/base64"
+
+	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/joho/godotenv"
+	"golang.org/x/oauth2"
+
+	sql_wrapper "BlueDevil-Engine/sql"
+	structures "BlueDevil-Engine/structures"
+	webpages "BlueDevil-Engine/webpages"
 )
 
 // Add `github.com/joho/godotenv` to your imports.
@@ -26,21 +31,17 @@ var (
 	oauth2Config *oauth2.Config
 
 	states = make(map[string]bool) // In-memory state store for demo purposes
+
+	adminGroup string
 )
 
-type User struct {
-    Email   string `json:"email"`
-    Name    string `json:"name"`
-    Subject string `json:"sub"`
-}
-
 func generateState() (string, error) {
-    b := make([]byte, 32)
-    _, err := rand.Read(b)
-    if err != nil {
-        return "", err
-    }
-    return base64.URLEncoding.EncodeToString(b), nil
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
 }
 
 func init() {
@@ -67,9 +68,37 @@ func init() {
 	if redirectURL == "" {
 		redirectURL = "http://localhost:8080/callback"
 	}
+
+	adminGroup = os.Getenv("ADMIN_GROUP")
 }
 
 func main() {
+	// Initialize the database
+	// Read DB settings from environment with sensible defaults.
+	dbDriver := os.Getenv("DB_DRIVER")
+	if dbDriver == "" {
+		dbDriver = os.Getenv("DATABASE_DRIVER")
+	}
+	if dbDriver == "" {
+		dbDriver = "sqlite3"
+	}
+
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = os.Getenv("DATABASE_DSN")
+	}
+	if dbPath == "" {
+		dbPath = "./blue_devil.db"
+	}
+	if err := sql_wrapper.InitDB(dbDriver, dbPath); err != nil {
+		log.Fatal(err)
+	}
+	if err := sql_wrapper.CreateTables(); err != nil {
+		log.Fatal(err)
+	}
+	// Ensure the database is closed on exit
+	defer sql_wrapper.CloseDB()
+
 	ctx := context.Background()
 
 	var err error
@@ -96,6 +125,26 @@ func main() {
 	http.HandleFunc("/login", handleLogin)
 	http.HandleFunc("/callback", handleCallback)
 	http.Handle("/dashboard", AuthMiddleware(http.HandlerFunc(handleDashboard)))
+	http.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
+		// Clear the ID token cookie
+		http.SetCookie(w, &http.Cookie{
+			Name:     "id_token",
+			Value:    "",
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   false, // set false for localhost dev
+			MaxAge:   -1,
+		})
+		http.Redirect(w, r, "/", http.StatusFound)
+	})
+
+	http.HandleFunc("/scoreboard", handleScoreboard)
+
+	// Admin routes
+	http.Handle("/admin", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleAdminDashboard))))
+	http.Handle("/admin/users", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleManageUsers))))
+	http.Handle("/admin/teams", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleManageTeams))))
+	http.Handle("/admin/services", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleManageServices))))
 
 	fmt.Println("Server started at http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -106,7 +155,7 @@ func handleHome(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
-	
+
 	state, err := generateState()
 	if err != nil {
 		http.Error(w, "Failed to generate state: "+err.Error(), http.StatusInternalServerError)
@@ -122,7 +171,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   false, // set false for localhost dev
-		MaxAge:   300,  // 5 minutes
+		MaxAge:   300,   // 5 minutes
 	})
 
 	http.Redirect(w, r, oauth2Config.AuthCodeURL(state), http.StatusFound)
@@ -185,10 +234,10 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Extract claims (e.g. email, name)
 	var claims struct {
-		Email         string `json:"email"`
-		EmailVerified bool   `json:"email_verified"`
-		Name          string `json:"name"`
-		Picture       string `json:"picture"`
+		Email         string   `json:"email"`
+		EmailVerified bool     `json:"email_verified"`
+		Name          string   `json:"name"`
+		Groups        []string `json:"groups"`
 	}
 
 	if err := idToken.Claims(&claims); err != nil {
@@ -206,15 +255,43 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   3600,  // 1 hour
 	})
 
+	// Check if the user is an admin we need to look at json claim "groups" and see if it contains adminGroup
+	isAdmin := false
+	if adminGroup != "" {
+		for _, group := range claims.Groups {
+			if group == adminGroup {
+				isAdmin = true
+				break
+			}
+		}
+	}
+
+	// For demonstration, print user info to server log
+	log.Printf("User Info: Email=%s, Name=%s, IsAdmin=%v\n", claims.Email, claims.Name, isAdmin)
+
+	// Update user in the database
+	user := &structures.User{
+		Email:    claims.Email,
+		Name:     claims.Name,
+		Subject:  idToken.Subject,
+		Is_Admin: isAdmin,
+	}
+	if err := sql_wrapper.UpdateUser(user); err != nil {
+		http.Error(w, "Failed to update user: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	http.Redirect(w, r, "/dashboard", http.StatusFound)
 }
 
 func handleDashboard(w http.ResponseWriter, r *http.Request) {
-	user := r.Context().Value("user").(User)
+	user := r.Context().Value("user").(structures.User)
 	fmt.Fprintf(w, "Welcome, %s!", user.Name)
 }
 
-
+func handleScoreboard(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "This is the public scoreboard.")
+}
 
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -234,11 +311,28 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Check if the user is an admin we need to look at json claim "groups" and see if it contains adminGroup
+		isAdmin := false
+		if adminGroup != "" {
+			var claims struct {
+				Groups []string `json:"groups"`
+			}
+			if err := idToken.Claims(&claims); err == nil {
+				for _, group := range claims.Groups {
+					if group == adminGroup {
+						isAdmin = true
+						break
+					}
+				}
+			}
+		}
+
 		// Extract claims from idToken
 		var claims struct {
-			Email   string `json:"email"`
-			Name    string `json:"name"`
-			Subject string `json:"sub"`
+			Email    string `json:"email"`
+			Name     string `json:"name"`
+			Subject  string `json:"sub"`
+			Is_Admin bool   `json:"is_admin"`
 		}
 
 		if err := idToken.Claims(&claims); err != nil {
@@ -247,11 +341,25 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Add user info to context
-		ctx = context.WithValue(r.Context(), "user", User{
-			Email:   claims.Email,
-			Name:    claims.Name,
-			Subject: claims.Subject,
+		ctx = context.WithValue(r.Context(), "user", structures.User{
+			Email:    claims.Email,
+			Name:     claims.Name,
+			Subject:  claims.Subject,
+			Is_Admin: isAdmin,
 		})
 		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func AdminAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := r.Context().Value("user").(structures.User)
+		// Check if the user is an admin
+		if !user.Is_Admin {
+			http.Error(w, "Forbidden: Admins only", http.StatusForbidden)
+			return
+		}
+
+		next.ServeHTTP(w, r)
 	})
 }
