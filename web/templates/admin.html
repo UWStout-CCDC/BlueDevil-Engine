@@ -244,8 +244,6 @@
                 <h3 id="editor-title">Edit Service</h3>
                 <div style="display:flex;gap:12px;flex-wrap:wrap">
                     <label style="flex:1 1 300px">Name<br><input id="svc-name" style="width:100%"></label>
-                    <label style="flex:1 1 180px">Host / IP<br><input id="svc-host" style="width:100%"
-                            placeholder="e.g. 10.0.0.5"></label>
                     <label style="flex:1 1 120px">ID (optional)<br><input id="svc-id" style="width:100%"
                             readonly></label>
                 </div>
@@ -273,14 +271,8 @@
                         title.textContent = service.name || service.service || 'Unnamed Service';
 
                         card.appendChild(title);
-                        if (service.host) {
-                            const hostLine = document.createElement('div');
-                            hostLine.className = 'muted';
-                            hostLine.textContent = service.host;
-                            card.appendChild(hostLine);
-                        }
 
-                        // hint: commands can include the placeholder {{ip}} which will be
+                        // hint: commands can include the placeholder {{host}} which will be
                         // replaced by the service host when executing checks.
 
                         // If the service has an explicit `checks` array, render each check.
@@ -404,7 +396,6 @@
                     // --- Editor UI code ---
                     const editor = document.getElementById('service-editor');
                     const svcNameInput = document.getElementById('svc-name');
-                    const svcHostInput = document.getElementById('svc-host');
                     const svcIdInput = document.getElementById('svc-id');
                     const checksList = document.getElementById('checks-list');
                     const addServiceBtn = document.getElementById('add-service-btn');
@@ -416,7 +407,6 @@
                         // service can be null for a new service
                         editor.style.display = 'block';
                         svcNameInput.value = service?.name || '';
-                        svcHostInput.value = service?.host || '';
                         svcIdInput.value = service?.id || '';
                         checksList.innerHTML = '';
                         const checks = Array.isArray(service?.checks) ? service.checks : [];
@@ -426,7 +416,6 @@
                     function closeEditor() {
                         editor.style.display = 'none';
                         svcNameInput.value = '';
-                        svcHostInput.value = '';
                         svcIdInput.value = '';
                         checksList.innerHTML = '';
                     }
@@ -532,7 +521,7 @@
 
                     saveServiceBtn.addEventListener('click', async (e) => {
                         e.preventDefault();
-                        const svc = { name: svcNameInput.value, host: svcHostInput.value };
+                        const svc = { name: svcNameInput.value };
                         if (svcIdInput.value) svc.id = svcIdInput.value;
                         const checks = Array.from(checksList.children || []).map(c => c._getData());
                         svc.checks = checks;

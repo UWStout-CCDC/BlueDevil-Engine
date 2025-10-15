@@ -42,8 +42,25 @@ func CreateTables() error {
 	CREATE TABLE IF NOT EXISTS services (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT NOT NULL UNIQUE,
-		scoreType TEXT NOT NULL,
 		description TEXT
+	);`
+
+	serviceCheckTable := `
+	CREATE TABLE IF NOT EXISTS service_checks (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		service_id INTEGER NOT NULL,
+		name TEXT NOT NULL,
+		command TEXT NOT NULL,
+		FOREIGN KEY(service_id) REFERENCES services(id)
+	);`
+
+	regexCheckTable := `
+	CREATE TABLE IF NOT EXISTS regex_checks (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		service_check_id INTEGER NOT NULL,
+		regex TEXT NOT NULL,
+		expected BOOLEAN NOT NULL,
+		FOREIGN KEY(service_check_id) REFERENCES service_checks(id)
 	);`
 
 	teamTable := `
@@ -129,7 +146,20 @@ func CreateTables() error {
 	}
 
 	_, err = db.Exec(compScoreTable)
-	return err
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(serviceCheckTable)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(regexCheckTable)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func GetUserByEmail(email string) (*structures.User, error) {

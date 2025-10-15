@@ -157,7 +157,6 @@ func main() {
 	http.Handle("/api/admin/get-users", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.GetUsersHandler))))
 	http.Handle("/api/admin/save-service", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.SaveServiceHandler))))
 	http.Handle("/api/admin/delete-service", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.DeleteServiceHandler))))
-	http.Handle("/api/admin/run-check", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.RunCheckHandler))))
 
 	// Serve static files (e.g., CSS, JS)
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
