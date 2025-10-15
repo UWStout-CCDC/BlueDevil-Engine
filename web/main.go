@@ -66,7 +66,7 @@ func init() {
 
 	redirectURL = os.Getenv("REDIRECT_URL")
 	if redirectURL == "" {
-		redirectURL = "http://localhost:8080/callback"
+		redirectURL = "http://localhost:8000/callback"
 	}
 
 	adminGroup = os.Getenv("ADMIN_GROUP")
@@ -141,13 +141,29 @@ func main() {
 	http.HandleFunc("/scoreboard", handleScoreboard)
 
 	// Admin routes
-	http.Handle("/admin", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleAdminDashboard))))
+	http.Handle("/admin/", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleAdminDashboard))))
 	http.Handle("/admin/users", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleManageUsers))))
 	http.Handle("/admin/teams", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleManageTeams))))
 	http.Handle("/admin/services", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleManageServices))))
+	http.Handle("/admin/box-mapping", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleManageMappings))))
+	http.Handle("/admin/scores", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleManageScoring))))
+	http.Handle("/admin/create_injects", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleCreateInjects))))
+	http.Handle("/admin/score_injects", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleScoreInjects))))
+	http.Handle("/admin/competitions", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleCompetitionSettings))))
 
-	fmt.Println("Server started at http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	// everything that starts with /api/admin send it to the admin api handlers
+	http.Handle("/api/admin/get-services", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.GetServicesHandler))))
+	http.Handle("/api/admin/get-teams", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.GetTeamsHandler))))
+	http.Handle("/api/admin/get-users", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.GetUsersHandler))))
+	http.Handle("/api/admin/save-service", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.SaveServiceHandler))))
+	http.Handle("/api/admin/delete-service", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.DeleteServiceHandler))))
+	http.Handle("/api/admin/run-check", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.RunCheckHandler))))
+
+	// Serve static files (e.g., CSS, JS)
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+
+	fmt.Println("Server started at http://localhost:8000")
+	log.Fatal(http.ListenAndServe(":8000", nil))
 }
 
 func handleHome(w http.ResponseWriter, r *http.Request) {

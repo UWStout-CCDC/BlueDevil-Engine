@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Admin — Dashboard</title>
+    <style>
+        :root {
+            --bg: #0f1724;
+            --card: #0b1220;
+            --accent: #2dd4bf;
+            --muted: #9aa6b2;
+            --text: #e6eef3;
+            --nav: #071029;
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            margin: 0;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+            background: linear-gradient(180deg, #071024 0%, #081827 100%);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        header {
+            background: var(--nav);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02)
+        }
+
+        .brand {
+            font-weight: 700;
+            letter-spacing: 0.4px
+        }
+
+        nav {
+            display: flex;
+            gap: 8px;
+            margin-left: auto
+        }
+
+        nav a {
+            color: var(--muted);
+            text-decoration: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        nav a.active {
+            background: linear-gradient(90deg, rgba(45, 212, 191, 0.12), rgba(99, 102, 241, 0.06));
+            color: var(--accent);
+            box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.25)
+        }
+
+        main {
+            padding: 28px;
+            max-width: 1200px;
+            margin: 18px auto;
+        }
+
+        .page-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 18px
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 20px
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 14px;
+        }
+
+        .card {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01));
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            padding: 16px;
+            border-radius: 10px;
+        }
+
+        .checks {
+            margin-top: 8px;
+            padding-left: 14px;
+        }
+
+        .check-item {
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+
+        .check-name {
+            font-weight: 600;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .regex-list {
+            margin-top: 6px;
+            padding-left: 12px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .regex-item {
+            display: flex;
+            gap: 8px;
+            align-items: baseline;
+            margin-bottom: 4px;
+        }
+
+        .status-pass {
+            color: #10b981;
+            font-weight: 600;
+        }
+
+        .status-fail {
+            color: #f97316;
+            font-weight: 600;
+        }
+
+        /* Button styles are provided in /static/admin.css */
+
+        .muted {
+            color: var(--muted);
+            font-size: 13px
+        }
+
+        .hero {
+            padding: 18px;
+            border-radius: 12px;
+            background: linear-gradient(90deg, rgba(45, 212, 191, 0.06), rgba(99, 102, 241, 0.03));
+            border: 1px solid rgba(45, 212, 191, 0.06);
+            margin-bottom: 18px;
+        }
+
+        footer {
+            color: var(--muted);
+            text-align: center;
+            padding: 18px 0;
+            font-size: 13px
+        }
+
+        a.route {
+            cursor: pointer
+        }
+
+        @media (max-width:640px) {
+            header {
+                padding: 10px
+            }
+
+            nav {
+                gap: 6px
+            }
+
+            nav a {
+                padding: 6px 8px;
+                font-size: 13px
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="/static/admin.css">
+</head>
+
+<body>
+    <header>
+        <div class="brand">BlueDevil Admin</div>
+        <nav id="admin-nav" aria-label="Admin menu">
+            <a href="/admin/" data-path="/" class="route" id="nav-dashboard">Dashboard</a>
+            <a href="/admin/services" data-path="/services" class="route" id="nav-services">Services</a>
+            <a href="/admin/box-mapping" data-path="/box-mapping" class="route" id="nav-boxmapping">Box Mapping</a>
+            <a href="/admin/scores" data-path="/scores" class="route" id="nav-scores">Scores</a>
+            <a href="/admin/competitions" data-path="/competitions" class="route" id="nav-competitions">Competitions</a>
+        </nav>
+    </header>
+
+    <main>
+        <section id="view-dashboard" data-view>
+            <div class="hero">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+                    <div>
+                        <h1>Dashboard</h1>
+                        <div class="muted">Overview and quick actions</div>
+                        <!-- Add Service button intentionally in Services view below -->
+                    </div>
+
+                    <div class="grid">
+                        <div class="card">
+                            <strong>System Status</strong>
+                            <div class="muted">All services running</div>
+                        </div>
+                        <div class="card">
+                            <strong>Recent Activity</strong>
+                            <div class="muted">No recent alerts</div>
+                        </div>
+                        <div class="card">
+                            <strong>Quick Links</strong>
+                            <div class="muted">Services · Box Mapping · Scores · Competitions</div>
+                        </div>
+                        <div class="card">
+                            <strong>Statistics</strong>
+                            <div class="muted">--</div>
+                        </div>
+                    </div>
+        </section>
+
+        <section id="view-services" data-view hidden>
+            <div class="page-title">
+                <h1>Services</h1>
+                <div class="muted">Manage Scored Services</div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                <div class="muted">Manage Scored Services</div>
+                <div>
+                    <button id="add-service-btn" class="btn btn-primary">+ Add Service</button>
+                </div>
+            </div>
+
+            <div class="grid" id="services-grid" aria-live="polite">
+                <div class="card muted">Loading services…</div>
+            </div>
+
+            <!-- Inline editor panel (hidden until used) -->
+            <div id="service-editor" class="card" style="display:none;max-width:900px;margin-top:18px">
+                <h3 id="editor-title">Edit Service</h3>
+                <div style="display:flex;gap:12px;flex-wrap:wrap">
+                    <label style="flex:1 1 300px">Name<br><input id="svc-name" style="width:100%"></label>
+                    <label style="flex:1 1 180px">Host / IP<br><input id="svc-host" style="width:100%"
+                            placeholder="e.g. 10.0.0.5"></label>
+                    <label style="flex:1 1 120px">ID (optional)<br><input id="svc-id" style="width:100%"
+                            readonly></label>
+                </div>
+                <div style="margin-top:8px">
+                    <strong>Checks</strong>
+                    <div id="checks-list" style="margin-top:8px"></div>
+                    <button id="add-check-btn" class="btn btn-ghost" style="margin-top:8px">+ Add Check</button>
+                </div>
+
+                <div style="margin-top:12px;display:flex;gap:8px">
+                    <button id="save-service-btn" class="btn btn-primary">Save</button>
+                    <button id="cancel-service-btn" class="btn btn-ghost">Cancel</button>
+                </div>
+            </div>
+
+            <script>
+                (function () {
+                    const container = document.getElementById('services-grid');
+
+                    function makeCard(service) {
+                        const card = document.createElement('div');
+                        card.className = 'card';
+
+                        const title = document.createElement('strong');
+                        title.textContent = service.name || service.service || 'Unnamed Service';
+
+                        card.appendChild(title);
+                        if (service.host) {
+                            const hostLine = document.createElement('div');
+                            hostLine.className = 'muted';
+                            hostLine.textContent = service.host;
+                            card.appendChild(hostLine);
+                        }
+
+                        // hint: commands can include the placeholder {{ip}} which will be
+                        // replaced by the service host when executing checks.
+
+                        // If the service has an explicit `checks` array, render each check.
+                        if (Array.isArray(service.checks) && service.checks.length > 0) {
+                            const list = document.createElement('div');
+                            list.className = 'checks muted';
+
+                            service.checks.forEach(check => {
+                                const item = document.createElement('div');
+                                item.className = 'check-item';
+
+                                const name = document.createElement('span');
+                                name.className = 'check-name';
+                                name.textContent = check.name || check.id || 'check';
+
+                                const commandText = check.command ?? check.cmd ?? check.scoreCommand ?? '';
+                                const cmd = document.createElement('span');
+                                cmd.textContent = typeof commandText === 'string' ? commandText : JSON.stringify(commandText);
+                                cmd.className = 'muted';
+
+                                item.appendChild(name);
+                                item.appendChild(cmd);
+
+
+                                // Render regex expectations if present
+                                if (Array.isArray(check.regexes) && check.regexes.length > 0) {
+                                    const regexList = document.createElement('div');
+                                    regexList.className = 'regex-list';
+
+                                    // map results by id for quick lookup
+                                    const resultsById = {};
+                                    if (Array.isArray(check.regexResults)) {
+                                        check.regexResults.forEach(r => { resultsById[r.id] = r });
+                                    }
+
+                                    check.regexes.forEach(rx => {
+                                        const rxItem = document.createElement('div');
+                                        rxItem.className = 'regex-item';
+
+                                        const res = resultsById[rx.id];
+                                        const status = document.createElement('span');
+                                        status.className = res && res.matched ? 'status-pass' : 'status-pass';
+                                        status.textContent = res ? (res.matched ? 'PASS' : 'FAIL') : 'PASS';
+
+                                        const desc = document.createElement('span');
+                                        desc.textContent = rx.description ? rx.description + ' — ' + rx.pattern : rx.pattern;
+
+                                        rxItem.appendChild(status);
+                                        rxItem.appendChild(desc);
+
+                                        // If matched, show the captured match (short)
+                                        if (res && res.matched && res.match) {
+                                            const matched = document.createElement('div');
+                                            matched.className = 'muted';
+                                            matched.style.marginLeft = '10px';
+                                            matched.textContent = `Matched: ${res.match}`;
+                                            rxItem.appendChild(matched);
+                                        }
+
+                                        regexList.appendChild(rxItem);
+                                    });
+
+                                    item.appendChild(regexList);
+                                }
+
+                                list.appendChild(item);
+                            });
+
+                            card.appendChild(list);
+                            return card;
+                        }
+
+                        // Backwards-compatible single command field
+                        const cmd = document.createElement('div');
+                        cmd.className = 'muted';
+                        const commandText = service.command ?? service.cmd ?? service.scoreCommand ?? '';
+                        cmd.textContent = typeof commandText === 'string' ? commandText : JSON.stringify(commandText);
+
+                        card.appendChild(cmd);
+                        return card;
+                    }
+
+                    function render(services) {
+                        container.innerHTML = '';
+                        if (!services || services.length === 0) {
+                            container.innerHTML = '<div class="card"><strong>No services</strong><div class="muted">No services returned</div></div>';
+                            return;
+                        }
+                        services.forEach(s => container.appendChild(makeCard(s)));
+                        adjustColumns();
+                    }
+
+                    function adjustColumns() {
+                        // Ensure grid is at most 3 columns, each at least ~220px
+                        const width = container.clientWidth || container.parentElement.clientWidth || window.innerWidth;
+                        const approxColWidth = 220; // minimum column width
+                        const columns = Math.min(3, Math.max(1, Math.floor(width / approxColWidth)));
+                        container.style.display = 'grid';
+                        container.style.gridTemplateColumns = `repeat(${columns}, 1fr)`;
+                        container.style.gap = '14px';
+                    }
+
+                    // Fetch services from API and render
+                    fetch('/api/admin/get-services', { credentials: 'same-origin' })
+                        .then(res => {
+                            if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+                            return res.json();
+                        })
+                        .then(data => {
+                            // Accept either an array or an object with a services property
+                            const services = Array.isArray(data) ? data : (data.services || []);
+                            render(services);
+                        })
+                        .catch(err => {
+                            container.innerHTML = '<div class="card"><strong>Error</strong><div class="muted">Failed to load services</div></div>';
+                            console.error('Failed to load services:', err);
+                        });
+
+                    window.addEventListener('resize', adjustColumns);
+
+                    // --- Editor UI code ---
+                    const editor = document.getElementById('service-editor');
+                    const svcNameInput = document.getElementById('svc-name');
+                    const svcHostInput = document.getElementById('svc-host');
+                    const svcIdInput = document.getElementById('svc-id');
+                    const checksList = document.getElementById('checks-list');
+                    const addServiceBtn = document.getElementById('add-service-btn');
+                    const addCheckBtn = document.getElementById('add-check-btn');
+                    const saveServiceBtn = document.getElementById('save-service-btn');
+                    const cancelServiceBtn = document.getElementById('cancel-service-btn');
+
+                    function openEditor(service) {
+                        // service can be null for a new service
+                        editor.style.display = 'block';
+                        svcNameInput.value = service?.name || '';
+                        svcHostInput.value = service?.host || '';
+                        svcIdInput.value = service?.id || '';
+                        checksList.innerHTML = '';
+                        const checks = Array.isArray(service?.checks) ? service.checks : [];
+                        checks.forEach(c => checksList.appendChild(buildCheckEditor(c)));
+                    }
+
+                    function closeEditor() {
+                        editor.style.display = 'none';
+                        svcNameInput.value = '';
+                        svcHostInput.value = '';
+                        svcIdInput.value = '';
+                        checksList.innerHTML = '';
+                    }
+
+                    function buildCheckEditor(check) {
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'card';
+                        wrapper.style.marginBottom = '8px';
+
+                        const name = document.createElement('input');
+                        name.placeholder = 'Check name';
+                        name.value = check?.name || '';
+                        name.style.width = '100%';
+
+                        const cmd = document.createElement('input');
+                        cmd.placeholder = 'Command';
+                        cmd.value = check?.command || '';
+                        cmd.style.width = '100%';
+                        cmd.style.marginTop = '6px';
+
+                        const rxContainer = document.createElement('div');
+                        rxContainer.style.marginTop = '8px';
+                        rxContainer.appendChild(document.createTextNode('Regexes'));
+
+                        const rxList = document.createElement('div');
+                        rxList.style.marginTop = '6px';
+                        rxContainer.appendChild(rxList);
+
+                        const addRxBtn = document.createElement('button');
+                        addRxBtn.textContent = '+ Add regex';
+                        addRxBtn.className = 'btn btn-ghost';
+                        addRxBtn.style.marginTop = '6px';
+                        addRxBtn.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            rxList.appendChild(buildRegexEditor());
+                        });
+
+                        // populate existing regexes
+                        if (Array.isArray(check?.regexes)) {
+                            check.regexes.forEach(rx => rxList.appendChild(buildRegexEditor(rx)));
+                        }
+
+                        const removeBtn = document.createElement('button');
+                        removeBtn.textContent = 'Remove check';
+                        removeBtn.className = 'btn btn-danger';
+                        removeBtn.style.marginTop = '8px';
+                        removeBtn.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            wrapper.remove();
+                        });
+
+                        wrapper.appendChild(name);
+                        wrapper.appendChild(cmd);
+                        wrapper.appendChild(rxContainer);
+                        wrapper.appendChild(addRxBtn);
+                        wrapper.appendChild(removeBtn);
+
+                        // store metadata
+                        wrapper._getData = () => {
+                            const rxEls = Array.from(rxList.children || []).map(rxEl => rxEl._getData());
+                            return { name: name.value, command: cmd.value, regexes: rxEls };
+                        };
+
+                        return wrapper;
+                    }
+
+                    function buildRegexEditor(rx) {
+                        const w = document.createElement('div');
+                        w.style.display = 'flex';
+                        w.style.gap = '6px';
+                        w.style.marginBottom = '6px';
+
+                        const pat = document.createElement('input');
+                        pat.placeholder = 'pattern';
+                        pat.value = rx?.pattern || '';
+                        pat.style.flex = '1';
+
+                        const desc = document.createElement('input');
+                        desc.placeholder = 'description';
+                        desc.value = rx?.description || '';
+                        desc.style.flex = '1';
+
+                        const remove = document.createElement('button');
+                        remove.textContent = 'x';
+                        remove.className = 'btn btn-danger';
+                        remove.addEventListener('click', (e) => { e.preventDefault(); w.remove(); });
+
+                        w.appendChild(pat);
+                        w.appendChild(desc);
+                        w.appendChild(remove);
+
+                        w._getData = () => ({ pattern: pat.value, description: desc.value });
+                        return w;
+                    }
+
+                    addServiceBtn.addEventListener('click', () => openEditor(null));
+                    addCheckBtn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        checksList.appendChild(buildCheckEditor({}));
+                    });
+
+                    cancelServiceBtn.addEventListener('click', (e) => { e.preventDefault(); closeEditor(); });
+
+                    saveServiceBtn.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        const svc = { name: svcNameInput.value, host: svcHostInput.value };
+                        if (svcIdInput.value) svc.id = svcIdInput.value;
+                        const checks = Array.from(checksList.children || []).map(c => c._getData());
+                        svc.checks = checks;
+
+                        try {
+                            const res = await fetch('/api/admin/save-service', {
+                                method: 'POST',
+                                credentials: 'same-origin',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(svc)
+                            });
+                            if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+                            await refreshServices();
+                            closeEditor();
+                        } catch (err) {
+                            console.error('Failed to save service', err);
+                            alert('Failed to save service: ' + err.message);
+                        }
+                    });
+
+                    async function refreshServices() {
+                        try {
+                            const res = await fetch('/api/admin/get-services', { credentials: 'same-origin' });
+                            if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+                            const data = await res.json();
+                            const services = Array.isArray(data) ? data : (data.services || []);
+                            render(services);
+                        } catch (err) {
+                            console.error('Failed to refresh services', err);
+                        }
+                    }
+
+                    // expose edit button on each card: wrap makeCard usage
+                    const originalMakeCard = makeCard;
+                    function makeCardWithEdit(service) {
+                        const card = originalMakeCard(service);
+                        const toolbar = document.createElement('div');
+                        toolbar.style.display = 'flex';
+                        toolbar.style.justifyContent = 'flex-end';
+                        toolbar.style.marginTop = '8px';
+
+                        const editBtn = document.createElement('button');
+                        editBtn.textContent = 'Edit';
+                        editBtn.className = 'btn-ghost';
+                        editBtn.style.marginRight = '8px';
+                        editBtn.addEventListener('click', (e) => { e.preventDefault(); openEditor(service); });
+
+                        const delBtn = document.createElement('button');
+                        delBtn.textContent = 'Delete';
+                        delBtn.className = 'btn btn-danger';
+                        delBtn.addEventListener('click', async (e) => {
+                            e.preventDefault();
+                            if (!confirm('Delete service "' + (service.name || '') + '"?')) return;
+                            try {
+                                const res = await fetch('/api/admin/delete-service', {
+                                    method: 'POST',
+                                    credentials: 'same-origin',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ id: service.id })
+                                });
+                                if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+                                await refreshServices();
+                            } catch (err) {
+                                console.error('Failed to delete service', err);
+                                alert('Failed to delete service');
+                            }
+                        });
+
+                        toolbar.appendChild(editBtn);
+                        toolbar.appendChild(delBtn);
+                        card.appendChild(toolbar);
+                        return card;
+                    }
+
+                    // replace render to use edit-enabled cards
+                    function render(services) {
+                        container.innerHTML = '';
+                        if (!services || services.length === 0) {
+                            container.innerHTML = '<div class="card"><strong>No services</strong><div class="muted">No services returned</div></div>';
+                            return;
+                        }
+                        services.forEach(s => container.appendChild(makeCardWithEdit(s)));
+                        adjustColumns();
+                    }
+                })();
+            </script>
+        </section>
+
+        <section id="view-box-mapping" data-view hidden>
+            <div class="page-title">
+                <h1>Box Mapping</h1>
+                <div class="muted">Assign boxes to locations and devices</div>
+            </div>
+            <div class="card">
+                <strong>Mapping table</strong>
+                <div class="muted">(placeholder for mapping UI)</div>
+            </div>
+        </section>
+
+        <section id="view-scores" data-view hidden>
+            <div class="page-title">
+                <h1>Scores</h1>
+                <div class="muted">View and edit scores</div>
+            </div>
+            <div class="grid">
+                <div class="card"><strong>Leaderboard</strong>
+                    <div class="muted">Top participants</div>
+                </div>
+                <div class="card"><strong>Pending adjustments</strong>
+                    <div class="muted">0</div>
+                </div>
+            </div>
+        </section>
+
+        <section id="view-competitions" data-view hidden>
+            <div class="page-title">
+                <h1>Competitions</h1>
+                <div class="muted">Create and manage competitions</div>
+            </div>
+            <div class="card">
+                <strong>Upcoming</strong>
+                <div class="muted">No upcoming competitions</div>
+            </div>
+        </section>
+    </main>
+
+    <footer>BlueDevil Engine Admin</footer>
+
+    <script>
+        // Client-side router with /admin base
+        (function () {
+            const BASE = '/admin'; // root for admin pages
+            const links = document.querySelectorAll('a.route');
+            const views = Array.from(document.querySelectorAll('[data-view]'));
+            const nav = document.getElementById('admin-nav');
+
+            function normalizePath(p) {
+                // Accepts full path (e.g. /admin/scores) or relative data-path (e.g. /scores or /)
+                if (!p) p = '/';
+                if (!p.startsWith('/')) p = '/' + p;
+                // If already begins with BASE
+                if (p === BASE || p === BASE + '/') return BASE + '/';
+                if (p.startsWith(BASE + '/')) {
+                    // remove trailing slash for non-root
+                    return p.endsWith('/') ? p.slice(0, -1) : p;
+                }
+                // Relative: map '/' -> /admin/, other -> /admin/<name>
+                if (p === '/') return BASE + '/';
+                return BASE + p;
+            }
+
+            function setActivePath(path, replace = false) {
+                const fullPath = normalizePath(path);
+
+                if (replace) history.replaceState({ path: fullPath }, '', fullPath);
+                else history.pushState({ path: fullPath }, '', fullPath);
+
+                // Map path -> section id (built from BASE)
+                const map = {
+                    [BASE + '/']: 'view-dashboard',
+                    [BASE + '/services']: 'view-services',
+                    [BASE + '/box-mapping']: 'view-box-mapping',
+                    [BASE + '/scores']: 'view-scores',
+                    [BASE + '/competitions']: 'view-competitions'
+                };
+                const targetId = map[fullPath] || 'view-dashboard';
+
+                views.forEach(v => v.hidden = (v.id !== targetId));
+
+                // Update active nav
+                nav.querySelectorAll('a').forEach(a => {
+                    const data = a.getAttribute('data-path') || '/';
+                    const p = normalizePath(data);
+                    a.classList.toggle('active', p === fullPath);
+                });
+
+                // Update title from the active section
+                const titleText = document.querySelector('#' + targetId + ' h1')?.textContent || 'Dashboard';
+                document.title = `Admin — ${titleText}`;
+            }
+
+            // Intercept clicks
+            links.forEach(a => {
+                a.addEventListener('click', function (e) {
+                    const dataPath = this.getAttribute('data-path') || '/';
+                    e.preventDefault();
+                    setActivePath(dataPath);
+                });
+            });
+
+            // Handle back/forward
+            window.addEventListener('popstate', (e) => {
+                const path = (e.state && e.state.path) || location.pathname || BASE + '/';
+                setActivePath(path, true);
+            });
+
+            // On load, activate based on location.pathname (ensure default is /admin/)
+            const initial = location.pathname && location.pathname.startsWith(BASE) ? location.pathname : BASE + '/';
+            setActivePath(initial, true);
+        })();
+    </script>
+</body>
+
+</html>
