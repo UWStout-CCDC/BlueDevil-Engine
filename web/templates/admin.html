@@ -189,7 +189,10 @@
             <a href="/admin/services" data-path="/services" class="route" id="nav-services">Services</a>
             <a href="/admin/box-mapping" data-path="/box-mapping" class="route" id="nav-boxmapping">Box Mapping</a>
             <a href="/admin/scores" data-path="/scores" class="route" id="nav-scores">Scores</a>
+            <a href="/admin/injects" data-path="/injects" class="route" id="nav-injects">Injects</a>
             <a href="/admin/competitions" data-path="/competitions" class="route" id="nav-competitions">Competitions</a>
+            <a href="/admin/users" data-path="/users" class="route" id="nav-users">Users</a>
+            <a href="/admin/teams" data-path="/teams" class="route" id="nav-teams">Teams</a>
         </nav>
     </header>
 
@@ -235,6 +238,8 @@
                 </div>
             </div>
 
+
+
             <div class="grid" id="services-grid" aria-live="polite">
                 <div class="card muted">Loading services…</div>
             </div>
@@ -244,8 +249,8 @@
                 <h3 id="editor-title">Edit Service</h3>
                 <div style="display:flex;gap:12px;flex-wrap:wrap">
                     <label style="flex:1 1 300px">Name<br><input id="svc-name" style="width:100%"></label>
-                    <label style="flex:1 1 120px">ID (optional)<br><input id="svc-id" style="width:100%"
-                            readonly></label>
+                    <label style="flex:1 1 120px">ID (optional)<br><input id="svc-id" type="number" min="1"
+                            style="width:100%" readonly></label>
                 </div>
                 <div style="margin-top:8px">
                     <strong>Checks</strong>
@@ -375,8 +380,35 @@
                         container.style.gap = '14px';
                     }
 
+                    // Helper: coerce incoming service IDs (and nested ids where present) to numbers
+                    function normalizeServices(arr) {
+                        if (!Array.isArray(arr)) return [];
+                        return arr.map(s => {
+                            const svc = Object.assign({}, s);
+                            if (svc.id !== undefined && svc.id !== null) svc.id = Number(svc.id);
+                            // normalize checks ids if present
+                            if (Array.isArray(svc.checks)) {
+                                svc.checks = svc.checks.map(c => {
+                                    const cc = Object.assign({}, c);
+                                    if (cc.id !== undefined && cc.id !== null) cc.id = Number(cc.id);
+                                    if (Array.isArray(cc.regexes)) {
+                                        cc.regexes = cc.regexes.map(r => {
+                                            const rr = Object.assign({}, r);
+                                            if (rr.id !== undefined && rr.id !== null) rr.id = Number(rr.id);
+                                            return rr;
+                                        });
+                                    }
+                                    return cc;
+                                });
+                            }
+                            return svc;
+                        });
+                    }
+
+
+
                     // Fetch services from API and render
-                    fetch('/api/admin/get-services', { credentials: 'same-origin' })
+                    fetch('/api/admin/services', { credentials: 'same-origin' })
                         .then(res => {
                             if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
                             return res.json();
@@ -384,7 +416,7 @@
                         .then(data => {
                             // Accept either an array or an object with a services property
                             const services = Array.isArray(data) ? data : (data.services || []);
-                            render(services);
+                            render(normalizeServices(services));
                         })
                         .catch(err => {
                             container.innerHTML = '<div class="card"><strong>Error</strong><div class="muted">Failed to load services</div></div>';
@@ -407,7 +439,7 @@
                         // service can be null for a new service
                         editor.style.display = 'block';
                         svcNameInput.value = service?.name || '';
-                        svcIdInput.value = service?.id || '';
+                        svcIdInput.value = (service && service.id !== undefined && service.id !== null) ? Number(service.id) : '';
                         checksList.innerHTML = '';
                         const checks = Array.isArray(service?.checks) ? service.checks : [];
                         checks.forEach(c => checksList.appendChild(buildCheckEditor(c)));
@@ -522,12 +554,12 @@
                     saveServiceBtn.addEventListener('click', async (e) => {
                         e.preventDefault();
                         const svc = { name: svcNameInput.value };
-                        if (svcIdInput.value) svc.id = svcIdInput.value;
+                        if (svcIdInput.value) svc.id = Number(svcIdInput.value);
                         const checks = Array.from(checksList.children || []).map(c => c._getData());
                         svc.checks = checks;
 
                         try {
-                            const res = await fetch('/api/admin/save-service', {
+                            const res = await fetch('/api/admin/services', {
                                 method: 'POST',
                                 credentials: 'same-origin',
                                 headers: { 'Content-Type': 'application/json' },
@@ -544,7 +576,7 @@
 
                     async function refreshServices() {
                         try {
-                            const res = await fetch('/api/admin/get-services', { credentials: 'same-origin' });
+                            const res = await fetch('/api/admin/services', { credentials: 'same-origin' });
                             if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
                             const data = await res.json();
                             const services = Array.isArray(data) ? data : (data.services || []);
@@ -576,11 +608,11 @@
                             e.preventDefault();
                             if (!confirm('Delete service "' + (service.name || '') + '"?')) return;
                             try {
-                                const res = await fetch('/api/admin/delete-service', {
-                                    method: 'POST',
+                                const res = await fetch('/api/admin/services', {
+                                    method: 'DELETE',
                                     credentials: 'same-origin',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ id: service.id })
+                                    body: JSON.stringify({ id: Number(service.id) })
                                 });
                                 if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
                                 await refreshServices();
@@ -613,11 +645,56 @@
         <section id="view-box-mapping" data-view hidden>
             <div class="page-title">
                 <h1>Box Mapping</h1>
-                <div class="muted">Assign boxes to locations and devices</div>
+                <div class="muted">Assign boxes (IP addresses) to teams and services</div>
             </div>
-            <div class="card">
-                <strong>Mapping table</strong>
-                <div class="muted">(placeholder for mapping UI)</div>
+
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+                <div style="flex:1;min-width:320px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                        <strong>Scoring Boxes</strong>
+                        <button id="add-box-btn" class="btn btn-primary">+ Add Box</button>
+                    </div>
+                    <div id="boxes-list"></div>
+                </div>
+
+                <div style="flex:1;min-width:320px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                        <strong>Team Mappings</strong>
+                        <button id="add-mapping-btn" class="btn btn-primary">+ Add Mapping</button>
+                    </div>
+                    <div id="mappings-list"></div>
+                </div>
+            </div>
+
+            <!-- Box editor -->
+            <div id="box-editor" class="card" style="display:none;max-width:700px;margin-top:18px">
+                <h3 id="box-editor-title">Edit Box</h3>
+                <div style="display:flex;gap:12px;flex-wrap:wrap">
+                    <label style="flex:1 1 240px">IP address<br><input id="box-ip" style="width:100%"></label>
+                    <label style="flex:1 1 120px">Port<br><input id="box-port" type="number" min="1"
+                            style="width:100%"></label>
+                    <label style="flex:1 1 200px">Service<br><select id="box-service"
+                            style="width:100%"></select></label>
+                </div>
+                <div style="margin-top:12px;display:flex;gap:8px">
+                    <button id="save-box-btn" class="btn btn-primary">Save Box</button>
+                    <button id="cancel-box-btn" class="btn btn-ghost">Cancel</button>
+                </div>
+            </div>
+
+            <!-- Mapping editor -->
+            <div id="mapping-editor" class="card" style="display:none;max-width:700px;margin-top:18px">
+                <h3 id="mapping-editor-title">Create Mapping</h3>
+                <div style="display:flex;gap:12px;flex-wrap:wrap">
+                    <label style="flex:1 1 200px">Team<br><select id="map-team" style="width:100%"></select></label>
+                    <label style="flex:1 1 200px">Box<br><select id="map-box" style="width:100%"></select></label>
+                    <label style="flex:1 1 200px">Service<br><select id="map-service"
+                            style="width:100%"></select></label>
+                </div>
+                <div style="margin-top:12px;display:flex;gap:8px">
+                    <button id="save-mapping-btn" class="btn btn-primary">Save Mapping</button>
+                    <button id="cancel-mapping-btn" class="btn btn-ghost">Cancel</button>
+                </div>
             </div>
         </section>
 
@@ -644,6 +721,46 @@
             <div class="card">
                 <strong>Upcoming</strong>
                 <div class="muted">No upcoming competitions</div>
+            </div>
+        </section>
+
+        <section id="view-users" data-view hidden>
+            <div class="page-title">
+                <h1>Users</h1>
+                <div class="muted">Manage user accounts</div>
+            </div>
+            <div class="card">
+                <strong>User list</strong>
+                <div class="muted">(placeholder for user management)</div>
+            </div>
+        </section>
+
+        <section id="view-teams" data-view hidden>
+            <div class="page-title">
+                <h1>Teams</h1>
+                <div class="muted">Manage teams</div>
+            </div>
+            <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">
+                <div style="flex:1">
+                    <strong>Team list</strong>
+                    <div id="team-list" class="muted">Loading…</div>
+                </div>
+                <div style="flex:1;max-width:320px">
+                    <label>New team name<br><input id="new-team-name" style="width:100%"></label>
+                    <div style="margin-top:8px"><button id="create-team-btn" class="btn btn-primary">Create
+                            Team</button></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="view-injects" data-view hidden>
+            <div class="page-title">
+                <h1>Injects</h1>
+                <div class="muted">Manage injects</div>
+            </div>
+            <div class="card">
+                <strong>Inject list</strong>
+                <div class="muted">(placeholder for inject management)</div>
             </div>
         </section>
     </main>
@@ -685,7 +802,10 @@
                     [BASE + '/services']: 'view-services',
                     [BASE + '/box-mapping']: 'view-box-mapping',
                     [BASE + '/scores']: 'view-scores',
-                    [BASE + '/competitions']: 'view-competitions'
+                    [BASE + '/competitions']: 'view-competitions',
+                    [BASE + '/users']: 'view-users',
+                    [BASE + '/teams']: 'view-teams',
+                    [BASE + '/injects']: 'view-injects',
                 };
                 const targetId = map[fullPath] || 'view-dashboard';
 
@@ -721,6 +841,192 @@
             // On load, activate based on location.pathname (ensure default is /admin/)
             const initial = location.pathname && location.pathname.startsWith(BASE) ? location.pathname : BASE + '/';
             setActivePath(initial, true);
+        })();
+    </script>
+    <script>
+        (function () {
+            // Box mapping client logic
+            const boxesList = document.getElementById('boxes-list');
+            const mappingsList = document.getElementById('mappings-list');
+            const addBoxBtn = document.getElementById('add-box-btn');
+            const addMappingBtn = document.getElementById('add-mapping-btn');
+            const boxEditor = document.getElementById('box-editor');
+            const boxIp = document.getElementById('box-ip');
+            const boxPort = document.getElementById('box-port');
+            const boxService = document.getElementById('box-service');
+            const saveBoxBtn = document.getElementById('save-box-btn');
+            const cancelBoxBtn = document.getElementById('cancel-box-btn');
+
+            const mappingEditor = document.getElementById('mapping-editor');
+            const mapTeam = document.getElementById('map-team');
+            const mapBox = document.getElementById('map-box');
+            const saveMappingBtn = document.getElementById('save-mapping-btn');
+            const cancelMappingBtn = document.getElementById('cancel-mapping-btn');
+
+            let teams = [];
+            let services = [];
+            let boxes = [];
+            let mappings = [];
+            let editingBox = null;
+
+            async function fetchData() {
+                await Promise.all([loadTeams(), loadServices(), loadBoxes(), loadMappings()]);
+                renderBoxes();
+                renderMappings();
+            }
+
+            async function loadTeams() {
+                const res = await fetch('/api/admin/teams', { credentials: 'same-origin' });
+                teams = await res.json();
+                // populate team select
+                mapTeam.innerHTML = '';
+                teams.forEach(t => mapTeam.appendChild(new Option(t.name, t.id)));
+                // populate team list UI
+                const teamList = document.getElementById('team-list');
+                if (teamList) {
+                    teamList.innerHTML = '';
+                    teams.forEach(t => {
+                        const d = document.createElement('div');
+                        d.className = 'muted';
+                        d.textContent = `${t.id}: ${t.name}`;
+                        teamList.appendChild(d);
+                    });
+                }
+            }
+
+            async function loadServices() {
+                const res = await fetch('/api/admin/services', { credentials: 'same-origin' });
+                services = await res.json();
+                boxService.innerHTML = '';
+                services.forEach(s => boxService.appendChild(new Option(s.name || s.service || s.name, s.id)));
+                // populate mapping service select
+                const mapService = document.getElementById('map-service');
+                if (mapService) {
+                    mapService.innerHTML = '';
+                    services.forEach(s => mapService.appendChild(new Option(s.name || s.service || s.name, s.id)));
+                }
+            }
+
+            async function loadBoxes() {
+                const res = await fetch('/api/admin/boxes', { credentials: 'same-origin' });
+                boxes = await res.json();
+                mapBox.innerHTML = '';
+                boxes.forEach(b => mapBox.appendChild(new Option(b.ip_address + ':' + b.port, b.id)));
+            }
+
+            async function loadMappings() {
+                const res = await fetch('/api/admin/box-mappings', { credentials: 'same-origin' });
+                mappings = await res.json();
+            }
+
+            function renderBoxes() {
+                boxesList.innerHTML = '';
+                if (!boxes || boxes.length === 0) boxesList.innerHTML = '<div class="card muted">No boxes</div>';
+                boxes.forEach(b => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    const title = document.createElement('strong');
+                    title.textContent = `${b.ip_address}:${b.port} (service ${b.service_id})`;
+                    card.appendChild(title);
+                    const toolbar = document.createElement('div');
+                    toolbar.style.marginTop = '8px';
+                    toolbar.style.display = 'flex';
+                    toolbar.style.justifyContent = 'flex-end';
+                    const editBtn = document.createElement('button');
+                    editBtn.className = 'btn-ghost';
+                    editBtn.textContent = 'Edit';
+                    editBtn.addEventListener('click', () => openBoxEditor(b));
+                    const delBtn = document.createElement('button');
+                    delBtn.className = 'btn btn-danger';
+                    delBtn.textContent = 'Delete';
+                    delBtn.addEventListener('click', async () => {
+                        if (!confirm('Delete box ' + b.ip_address + '?')) return;
+                        const res = await fetch('/api/admin/boxes', { method: 'DELETE', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: b.id }) });
+                        if (!res.ok) return alert('Failed to delete box');
+                        await loadBoxes(); renderBoxes();
+                    });
+                    toolbar.appendChild(editBtn); toolbar.appendChild(delBtn);
+                    card.appendChild(toolbar);
+                    boxesList.appendChild(card);
+                });
+            }
+
+            function renderMappings() {
+                mappingsList.innerHTML = '';
+                if (!mappings || mappings.length === 0) mappingsList.innerHTML = '<div class="card muted">No mappings</div>';
+                mappings.forEach(m => {
+                    const t = teams.find(x => x.id === m.team_id)?.name || m.team_id;
+                    const b = boxes.find(x => x.id === m.scoring_box_id);
+                    const svc = services.find(x => x.id === m.service_id)?.name || m.service_id;
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    const title = document.createElement('strong');
+                    title.textContent = `Team: ${t} → Box: ${b ? (b.ip_address + ':' + b.port) : m.scoring_box_id} (service: ${svc})`;
+                    card.appendChild(title);
+                    const toolbar = document.createElement('div');
+                    toolbar.style.marginTop = '8px';
+                    toolbar.style.display = 'flex';
+                    toolbar.style.justifyContent = 'flex-end';
+                    const delBtn = document.createElement('button');
+                    delBtn.className = 'btn btn-danger';
+                    delBtn.textContent = 'Unmap';
+                    delBtn.addEventListener('click', async () => {
+                        if (!confirm('Remove mapping?')) return;
+                        const res = await fetch('/api/admin/box-mappings', { method: 'DELETE', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: m.id }) });
+                        if (!res.ok) return alert('Failed to delete mapping');
+                        await loadMappings(); renderMappings();
+                    });
+                    toolbar.appendChild(delBtn);
+                    card.appendChild(toolbar);
+                    mappingsList.appendChild(card);
+                });
+            }
+
+            function openBoxEditor(b) {
+                editingBox = b || null;
+                boxEditor.style.display = 'block';
+                boxIp.value = b ? b.ip_address : '';
+                boxPort.value = b ? b.port : '';
+                boxService.value = b ? b.service_id : (services[0] && services[0].id);
+            }
+
+            function closeBoxEditor() { editingBox = null; boxEditor.style.display = 'none'; }
+
+            addBoxBtn.addEventListener('click', () => openBoxEditor(null));
+            cancelBoxBtn.addEventListener('click', (e) => { e.preventDefault(); closeBoxEditor(); });
+            saveBoxBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const payload = { service_id: Number(boxService.value), ip_address: boxIp.value, port: Number(boxPort.value) };
+                if (editingBox && editingBox.id) payload.id = editingBox.id;
+                const res = await fetch('/api/admin/boxes', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!res.ok) return alert('Failed to save box');
+                await loadBoxes(); renderBoxes(); closeBoxEditor();
+            });
+
+            // Mapping editor logic
+            document.getElementById('save-mapping-btn').addEventListener('click', async (e) => {
+                e.preventDefault();
+                const payload = { team_id: Number(mapTeam.value), scoring_box_id: Number(mapBox.value), service_id: Number(document.getElementById('map-service').value) };
+                const res = await fetch('/api/admin/box-mappings', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!res.ok) return alert('Failed to save mapping');
+                await loadMappings(); renderMappings(); mappingEditor.style.display = 'none';
+            });
+            cancelMappingBtn.addEventListener('click', (e) => { e.preventDefault(); mappingEditor.style.display = 'none'; });
+
+            // quick hook: show mapping editor when clicking on the "Add Mapping" button
+            document.getElementById('add-mapping-btn')?.addEventListener('click', () => { mappingEditor.style.display = 'block'; });
+
+            // initial load
+            fetchData().catch(err => console.error('box mapping load error', err));
+            // Create team handler
+            document.getElementById('create-team-btn').addEventListener('click', async (e) => {
+                e.preventDefault();
+                const name = document.getElementById('new-team-name').value.trim();
+                if (!name) return alert('Enter team name');
+                const res = await fetch('/api/admin/teams', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+                if (!res.ok) return alert('Failed to create team');
+                await loadTeams();
+            });
         })();
     </script>
 </body>

@@ -3,59 +3,12 @@ package webpages
 // Handlers for admin-related pages.
 
 import (
+	sql_wrapper "BlueDevil-Engine/sql"
+	structures "BlueDevil-Engine/structures"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
-	"sync"
-)
-
-// In-memory services store for demo/editing purposes. In production this should be
-// backed by persistent storage (database).
-var (
-	servicesLock sync.RWMutex
-	servicesData = []map[string]interface{}{
-		{
-			"id":   1,
-			"name": "Service A",
-			"host": "192.0.2.10",
-			"checks": []map[string]interface{}{
-				{"id": "1", "name": "SSH check", "command": "nc -zv localhost 22"},
-				{"id": "2", "name": "Disk space", "command": "df -h /"},
-			},
-		},
-		{
-			"id":   2,
-			"name": "Service B",
-			"host": "198.51.100.5",
-			"checks": []map[string]interface{}{
-				{
-					"id":      "1",
-					"name":    "HTTP check",
-					"command": "curl -fsS https://example.com/health",
-					"regexes": []map[string]interface{}{
-						{"id": "1", "pattern": "<title>(.*?)</title>", "description": "Page title"},
-						{"id": "2", "pattern": "<h1.*?>(.*?)</h1>", "description": "First heading"},
-					},
-				},
-				{"id": "2", "name": "DB connectivity", "command": "pg_isready -h dbhost -p 5432"},
-			},
-		},
-		{
-			"id":   3,
-			"name": "Service C",
-			"checks": []map[string]interface{}{
-				{"id": "1", "name": "Ping", "command": "ping -c1 8.8.8.8"},
-			},
-		},
-	}
-)
-
-// In-memory credentials store (for demo). Keyed by credential id or name.
-var (
-	credsLock sync.RWMutex
-	credsData = map[string]map[string]string{
-		// example: "shared-db": {"username":"admin","password":"s3cr3t"}
-	}
 )
 
 func HandleAdminDashboard(w http.ResponseWriter, r *http.Request) {
@@ -84,11 +37,7 @@ func HandleManageScoring(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "templates/admin.html")
 }
 
-func HandleCreateInjects(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "templates/admin.html")
-}
-
-func HandleScoreInjects(w http.ResponseWriter, r *http.Request) {
+func HandleManageInjects(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "templates/admin.html")
 }
 
@@ -96,12 +45,37 @@ func HandleCompetitionSettings(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "templates/admin.html")
 }
 
+func HandleApiServices(w http.ResponseWriter, r *http.Request) {
+	// If GET, return list of services, if POST, save a service., if DELETE, delete a service.
+	log.Println("API Services endpoint hit with method " + r.Method)
+	switch r.Method {
+	case http.MethodGet:
+		GetServicesHandler(w, r)
+	case http.MethodPost:
+		SaveServiceHandler(w, r)
+	case http.MethodDelete:
+		DeleteServiceHandler(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 func GetServicesHandler(w http.ResponseWriter, r *http.Request) {
-	// Return the in-memory services list as JSON
+	services, err := sql_wrapper.GetAllServices()
+	if err != nil {
+		http.Error(w, "Failed to get services: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if services == nil {
+		services = []structures.Service{}
+	}
+
+	if err != nil {
+		http.Error(w, "Failed to get services: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
-	servicesLock.RLock()
-	defer servicesLock.RUnlock()
-	if err := json.NewEncoder(w).Encode(servicesData); err != nil {
+	if err := json.NewEncoder(w).Encode(services); err != nil {
 		http.Error(w, "Failed to encode services: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -113,119 +87,223 @@ func SaveServiceHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	var svc map[string]interface{}
+	var svc structures.Service
 	if err := json.NewDecoder(r.Body).Decode(&svc); err != nil {
 		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	log.Println("Saving Service following json" + svc.Name)
 
-	servicesLock.Lock()
-	defer servicesLock.Unlock()
-
-	// If id is present, update; otherwise append with a new id (max+1)
-	if idv, ok := svc["id"]; ok && idv != nil {
-		// find and replace
-		for i, s := range servicesData {
-			if s["id"] == idv {
-				servicesData[i] = svc
-				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(svc)
-				return
-			}
-		}
-		// not found; append
-		servicesData = append(servicesData, svc)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(svc)
+	if err := sql_wrapper.SaveService(&svc); err != nil {
+		http.Error(w, "Failed to save service: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// assign new id
-	maxID := 0
-	for _, s := range servicesData {
-		if idnum, ok := s["id"].(float64); ok {
-			if int(idnum) > maxID {
-				maxID = int(idnum)
-			}
-		}
-		if idnum, ok := s["id"].(int); ok {
-			if idnum > maxID {
-				maxID = idnum
-			}
-		}
-	}
-	svc["id"] = maxID + 1
-	servicesData = append(servicesData, svc)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(svc)
+	if err := json.NewEncoder(w).Encode(svc); err != nil {
+		http.Error(w, "Failed to encode response: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 // DeleteServiceHandler deletes a service by id.
 func DeleteServiceHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodDelete {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	var body struct {
-		ID interface{} `json:"id"`
+	var req struct {
+		ID int `json:"id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	servicesLock.Lock()
-	defer servicesLock.Unlock()
-	for i, s := range servicesData {
-		if s["id"] == body.ID {
-			servicesData = append(servicesData[:i], servicesData[i+1:]...)
-			w.WriteHeader(http.StatusNoContent)
+	if err := sql_wrapper.DeleteServiceByID(req.ID); err != nil {
+		http.Error(w, "Failed to delete service: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// Teams API
+func HandleApiTeams(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		teams, err := sql_wrapper.GetAllTeams()
+		if err != nil {
+			http.Error(w, "Failed to get teams: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		// try numeric compare
-		if idnum, ok := s["id"].(float64); ok {
-			if idnum == body.ID {
-				servicesData = append(servicesData[:i], servicesData[i+1:]...)
-				w.WriteHeader(http.StatusNoContent)
-				return
-			}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(teams)
+	case http.MethodPost:
+		var t structures.Team
+		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+			return
 		}
+		if err := sql_wrapper.CreateTeam(&t); err != nil {
+			http.Error(w, "Failed to create team: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(t)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
-	http.Error(w, "Service not found", http.StatusNotFound)
 }
 
-func GetTeamsHandler(w http.ResponseWriter, r *http.Request) {
-	// Placeholder: Return a list of teams in JSON format.
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`[
-		{"id": 1, "name": "Team Alpha"},
-		{"id": 2, "name": "Team Beta"}
-	]`))
+// Team members API (simple endpoints)
+func HandleTeamMembers(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		// expects ?team_id=NN
+		q := r.URL.Query().Get("team_id")
+		if q == "" {
+			http.Error(w, "team_id required", http.StatusBadRequest)
+			return
+		}
+		var teamID int
+		_, err := fmt.Sscanf(q, "%d", &teamID)
+		if err != nil {
+			http.Error(w, "invalid team_id", http.StatusBadRequest)
+			return
+		}
+		users, err := sql_wrapper.GetUsersInTeam(teamID)
+		if err != nil {
+			http.Error(w, "Failed to get users: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(users)
+	case http.MethodPost:
+		var req struct {
+			TeamID, UserID int `json:"team_id" json:"user_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := sql_wrapper.AddUserToTeam(req.TeamID, req.UserID); err != nil {
+			http.Error(w, "Failed to add user to team: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	case http.MethodDelete:
+		var req struct {
+			TeamID, UserID int `json:"team_id" json:"user_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := sql_wrapper.RemoveUserFromTeam(req.TeamID, req.UserID); err != nil {
+			http.Error(w, "Failed to remove user from team: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
-func GetUsersHandler(w http.ResponseWriter, r *http.Request) {
-	// Placeholder: Return a list of users in JSON format.
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`[
-		{"id": 1, "username": "admin", "role": "administrator"},
-		{"id": 2, "username": "user1", "role": "user"}
-	]`))
+// Scoring boxes API
+func HandleApiBoxes(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		boxes, err := sql_wrapper.GetAllScoringBoxes()
+		if err != nil {
+			http.Error(w, "Failed to get boxes: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(boxes)
+	case http.MethodPost:
+		// Create a scored box (maps IP -> team). Expect { team_id, ip_address, port }
+		var req struct {
+			TeamID    int    `json:"team_id"`
+			IPAddress string `json:"ip_address"`
+			Port      int    `json:"port"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		var b structures.ScoringBox
+		b.TeamID = req.TeamID
+		b.IPAddress = req.IPAddress
+		b.Port = req.Port
+		if err := sql_wrapper.SaveScoringBox(&b); err != nil {
+			http.Error(w, "Failed to save box: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(b)
+	case http.MethodDelete:
+		var req struct {
+			ID int `json:"id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := sql_wrapper.DeleteScoringBox(req.ID); err != nil {
+			http.Error(w, "Failed to delete box: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
-func GetMappingsHandler(w http.ResponseWriter, r *http.Request) {
-	// Placeholder: Return a list of box mappings in JSON format.
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`[
-		{"id": 1, "box": "Box 1", "team": "Team Alpha"},
-		{"id": 2, "box": "Box 2", "team": "Team Beta"}
-	]`))
-}
-
-func GetScoresHandler(w http.ResponseWriter, r *http.Request) {
-	// Placeholder: Return a list of scores in JSON format.
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`[
-		{"team": "Team Alpha", "score": 150},
-		{"team": "Team Beta", "score": 120}
-	]`))
+// Box mappings API
+func HandleApiBoxMappings(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		maps, err := sql_wrapper.GetAllBoxMappings()
+		if err != nil {
+			http.Error(w, "Failed to get mappings: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(maps)
+	case http.MethodPost:
+		// Map a service to an existing scored box. Expect { scoring_box_id, service_id }
+		var req struct {
+			ScoringBoxID int `json:"scoring_box_id"`
+			ServiceID    int `json:"service_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		var m structures.BoxMapping
+		m.ScoringBoxID = req.ScoringBoxID
+		m.ServiceID = req.ServiceID
+		if err := sql_wrapper.SaveBoxMapping(&m); err != nil {
+			http.Error(w, "Failed to save mapping: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(m)
+	case http.MethodDelete:
+		var req struct {
+			ID int `json:"id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := sql_wrapper.DeleteBoxMapping(req.ID); err != nil {
+			http.Error(w, "Failed to delete mapping: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }

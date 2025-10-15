@@ -147,16 +147,15 @@ func main() {
 	http.Handle("/admin/services", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleManageServices))))
 	http.Handle("/admin/box-mapping", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleManageMappings))))
 	http.Handle("/admin/scores", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleManageScoring))))
-	http.Handle("/admin/create_injects", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleCreateInjects))))
-	http.Handle("/admin/score_injects", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleScoreInjects))))
+	http.Handle("/admin/injects", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleManageInjects))))
 	http.Handle("/admin/competitions", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleCompetitionSettings))))
 
 	// everything that starts with /api/admin send it to the admin api handlers
-	http.Handle("/api/admin/get-services", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.GetServicesHandler))))
-	http.Handle("/api/admin/get-teams", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.GetTeamsHandler))))
-	http.Handle("/api/admin/get-users", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.GetUsersHandler))))
-	http.Handle("/api/admin/save-service", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.SaveServiceHandler))))
-	http.Handle("/api/admin/delete-service", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.DeleteServiceHandler))))
+	http.Handle("/api/admin/services", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiServices))))
+	http.Handle("/api/admin/teams", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiTeams))))
+	http.Handle("/api/admin/boxes", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiBoxes))))
+	http.Handle("/api/admin/box-mappings", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiBoxMappings))))
+	http.Handle("/api/admin/team-members", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleTeamMembers))))
 
 	// Serve static files (e.g., CSS, JS)
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
@@ -296,7 +295,24 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/dashboard", http.StatusFound)
+	// Redirect to the originally requested page via the redirect_to cookie, if they dont have it go to /dashboard
+	redirectTo := "/dashboard"
+	if redirectCookie, err := r.Cookie("redirect_to"); err == nil {
+		if redirectCookie.Value != "" {
+			redirectTo = redirectCookie.Value
+		}
+		// Clear the redirect_to cookie
+		http.SetCookie(w, &http.Cookie{
+			Name:     "redirect_to",
+			Value:    "",
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   false, // set false for localhost dev
+			MaxAge:   -1,    // delete cookie
+		})
+	}
+
+	http.Redirect(w, r, redirectTo, http.StatusFound)
 }
 
 func handleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -310,6 +326,16 @@ func handleScoreboard(w http.ResponseWriter, r *http.Request) {
 
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set a cookie for redirect after login
+		http.SetCookie(w, &http.Cookie{
+			Name:     "redirect_to",
+			Value:    r.URL.Path,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   false, // set false for localhost dev
+			MaxAge:   3600,  // 1 hour
+		})
+
 		cookie, err := r.Cookie("id_token")
 		if err != nil || cookie.Value == "" {
 			http.Redirect(w, r, "/login", http.StatusFound)
