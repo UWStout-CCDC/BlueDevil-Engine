@@ -84,18 +84,12 @@ func CreateTables() error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		team_id INTEGER NOT NULL,
 		ip_address TEXT NOT NULL,
-		port INTEGER NOT NULL,
-		FOREIGN KEY(team_id) REFERENCES teams(id)
-	);`
-
-	boxMappingsTable := `
-	CREATE TABLE IF NOT EXISTS box_mappings (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		scored_box_id INTEGER NOT NULL,
-		service_id INTEGER NOT NULL,
-		FOREIGN KEY(scored_box_id) REFERENCES scored_boxes(id),
+		service_id INTEGER,
+		FOREIGN KEY(team_id) REFERENCES teams(id),
 		FOREIGN KEY(service_id) REFERENCES services(id)
 	);`
+
+	// box_mappings and team_mappings removed: boxes now store service_id directly
 
 	individualPractice := `
 	CREATE TABLE IF NOT EXISTS individual_scores (
@@ -169,10 +163,7 @@ func CreateTables() error {
 		return err
 	}
 
-	_, err = db.Exec(boxMappingsTable)
-	if err != nil {
-		return err
-	}
+	// no separate mapping tables to create
 	return nil
 }
 
@@ -259,7 +250,7 @@ func GetAllUsers() ([]structures.User, error) {
 }
 
 func GetAllScoringBoxes() ([]structures.ScoringBox, error) {
-	rows, err := db.Query("SELECT id, team_id, ip_address, port FROM scored_boxes ORDER BY id ASC")
+	rows, err := db.Query("SELECT id, ip_address, team_id, service_id FROM scored_boxes ORDER BY id ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +258,7 @@ func GetAllScoringBoxes() ([]structures.ScoringBox, error) {
 	var boxes []structures.ScoringBox
 	for rows.Next() {
 		var b structures.ScoringBox
-		if err := rows.Scan(&b.ID, &b.TeamID, &b.IPAddress, &b.Port); err != nil {
+		if err := rows.Scan(&b.ID, &b.IPAddress, &b.TeamID, &b.ServiceID); err != nil {
 			return nil, err
 		}
 		boxes = append(boxes, b)
@@ -280,7 +271,7 @@ func SaveScoringBox(b *structures.ScoringBox) error {
 		return nil
 	}
 	if b.ID == 0 {
-		res, err := db.Exec("INSERT INTO scored_boxes (team_id, ip_address, port) VALUES (?, ?, ?)", b.TeamID, b.IPAddress, b.Port)
+		res, err := db.Exec("INSERT INTO scored_boxes (team_id, ip_address, service_id) VALUES (?, ?, ?)", b.TeamID, b.IPAddress, b.ServiceID)
 		if err != nil {
 			return err
 		}
@@ -290,57 +281,12 @@ func SaveScoringBox(b *structures.ScoringBox) error {
 		}
 		return nil
 	}
-	_, err := db.Exec("UPDATE scored_boxes SET team_id = ?, ip_address = ?, port = ? WHERE id = ?", b.TeamID, b.IPAddress, b.Port, b.ID)
+	_, err := db.Exec("UPDATE scored_boxes SET team_id = ?, ip_address = ?, service_id = ? WHERE id = ?", b.TeamID, b.IPAddress, b.ServiceID, b.ID)
 	return err
 }
 
 func DeleteScoringBox(id int) error {
-	_, err := db.Exec("DELETE FROM box_mappings WHERE scored_box_id = ?", id)
-	if err != nil {
-		return err
-	}
-	_, err = db.Exec("DELETE FROM scored_boxes WHERE id = ?", id)
-	return err
-}
-
-func GetAllBoxMappings() ([]structures.BoxMapping, error) {
-	rows, err := db.Query("SELECT id, scored_box_id, service_id FROM box_mappings ORDER BY id ASC")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var mappings []structures.BoxMapping
-	for rows.Next() {
-		var m structures.BoxMapping
-		if err := rows.Scan(&m.ID, &m.ScoringBoxID, &m.ServiceID); err != nil {
-			return nil, err
-		}
-		mappings = append(mappings, m)
-	}
-	return mappings, nil
-}
-
-func SaveBoxMapping(m *structures.BoxMapping) error {
-	if m == nil {
-		return nil
-	}
-	if m.ID == 0 {
-		res, err := db.Exec("INSERT INTO box_mappings (scored_box_id, service_id) VALUES (?, ?)", m.ScoringBoxID, m.ServiceID)
-		if err != nil {
-			return err
-		}
-		last, err := res.LastInsertId()
-		if err == nil {
-			m.ID = int(last)
-		}
-		return nil
-	}
-	_, err := db.Exec("UPDATE box_mappings SET scored_box_id = ?, service_id = ? WHERE id = ?", m.ScoringBoxID, m.ServiceID, m.ID)
-	return err
-}
-
-func DeleteBoxMapping(id int) error {
-	_, err := db.Exec("DELETE FROM box_mappings WHERE id = ?", id)
+	_, err := db.Exec("DELETE FROM scored_boxes WHERE id = ?", id)
 	return err
 }
 

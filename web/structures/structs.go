@@ -40,18 +40,10 @@ type Team struct {
 	Name string `json:"name"`
 }
 
-// ScoringBox represents a box with an IP and port used for scoring a service
+// ScoringBox represents a box with an IP assigned to a team and service
 type ScoringBox struct {
 	ID        int    `json:"id"`
-	TeamID    int    `json:"team_id"`
 	IPAddress string `json:"ip_address"`
-	Port      int    `json:"port"`
-}
-
-// BoxMapping maps a team to a scoring box
-type BoxMapping struct {
-	ID           int `json:"id"`
-	TeamID       int `json:"team_id"`
-	ScoringBoxID int `json:"scoring_box_id"`
-	ServiceID    int `json:"service_id"`
+	TeamID    int    `json:"team_id"`
+	ServiceID int    `json:"service_id"`
 }

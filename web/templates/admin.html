@@ -238,6 +238,10 @@
                 </div>
             </div>
 
+            <hr style="margin:18px 0;border-color:rgba(255,255,255,0.04)">
+
+            <!-- (Team mapping UI removed — boxes now store team_id and service_id directly) -->
+
 
 
             <div class="grid" id="services-grid" aria-live="polite">
@@ -657,24 +661,17 @@
                     <div id="boxes-list"></div>
                 </div>
 
-                <div style="flex:1;min-width:320px">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                        <strong>Team Mappings</strong>
-                        <button id="add-mapping-btn" class="btn btn-primary">+ Add Mapping</button>
-                    </div>
-                    <div id="mappings-list"></div>
-                </div>
+                <!-- Right column removed: mappings are handled directly on boxes -->
             </div>
 
-            <!-- Box editor -->
+            <!-- Box editor (IP + Service) -->
             <div id="box-editor" class="card" style="display:none;max-width:700px;margin-top:18px">
                 <h3 id="box-editor-title">Edit Box</h3>
                 <div style="display:flex;gap:12px;flex-wrap:wrap">
                     <label style="flex:1 1 240px">IP address<br><input id="box-ip" style="width:100%"></label>
-                    <label style="flex:1 1 120px">Port<br><input id="box-port" type="number" min="1"
-                            style="width:100%"></label>
                     <label style="flex:1 1 200px">Service<br><select id="box-service"
                             style="width:100%"></select></label>
+                    <label style="flex:1 1 160px">Team<br><select id="box-team" style="width:100%"></select></label>
                 </div>
                 <div style="margin-top:12px;display:flex;gap:8px">
                     <button id="save-box-btn" class="btn btn-primary">Save Box</button>
@@ -682,20 +679,7 @@
                 </div>
             </div>
 
-            <!-- Mapping editor -->
-            <div id="mapping-editor" class="card" style="display:none;max-width:700px;margin-top:18px">
-                <h3 id="mapping-editor-title">Create Mapping</h3>
-                <div style="display:flex;gap:12px;flex-wrap:wrap">
-                    <label style="flex:1 1 200px">Team<br><select id="map-team" style="width:100%"></select></label>
-                    <label style="flex:1 1 200px">Box<br><select id="map-box" style="width:100%"></select></label>
-                    <label style="flex:1 1 200px">Service<br><select id="map-service"
-                            style="width:100%"></select></label>
-                </div>
-                <div style="margin-top:12px;display:flex;gap:8px">
-                    <button id="save-mapping-btn" class="btn btn-primary">Save Mapping</button>
-                    <button id="cancel-mapping-btn" class="btn btn-ghost">Cancel</button>
-                </div>
-            </div>
+            <!-- mapping-editor removed -->
         </section>
 
         <section id="view-scores" data-view hidden>
@@ -811,6 +795,11 @@
 
                 views.forEach(v => v.hidden = (v.id !== targetId));
 
+                // If box-mapping view is now active, call optional hook to refresh its data
+                if (targetId === 'view-box-mapping' && typeof window.onBoxMappingVisible === 'function') {
+                    try { window.onBoxMappingVisible(); } catch (e) { console.error('onBoxMappingVisible hook failed', e); }
+                }
+
                 // Update active nav
                 nav.querySelectorAll('a').forEach(a => {
                     const data = a.getAttribute('data-path') || '/';
@@ -845,43 +834,29 @@
     </script>
     <script>
         (function () {
-            // Box mapping client logic
+            // Simplified boxes client logic: boxes now store team_id and service_id directly
             const boxesList = document.getElementById('boxes-list');
-            const mappingsList = document.getElementById('mappings-list');
             const addBoxBtn = document.getElementById('add-box-btn');
-            const addMappingBtn = document.getElementById('add-mapping-btn');
             const boxEditor = document.getElementById('box-editor');
             const boxIp = document.getElementById('box-ip');
-            const boxPort = document.getElementById('box-port');
+            const boxTeam = document.getElementById('box-team');
             const boxService = document.getElementById('box-service');
             const saveBoxBtn = document.getElementById('save-box-btn');
             const cancelBoxBtn = document.getElementById('cancel-box-btn');
 
-            const mappingEditor = document.getElementById('mapping-editor');
-            const mapTeam = document.getElementById('map-team');
-            const mapBox = document.getElementById('map-box');
-            const saveMappingBtn = document.getElementById('save-mapping-btn');
-            const cancelMappingBtn = document.getElementById('cancel-mapping-btn');
-
             let teams = [];
             let services = [];
             let boxes = [];
-            let mappings = [];
             let editingBox = null;
 
             async function fetchData() {
-                await Promise.all([loadTeams(), loadServices(), loadBoxes(), loadMappings()]);
+                await Promise.all([loadTeams(), loadServices(), loadBoxes()]);
                 renderBoxes();
-                renderMappings();
             }
 
             async function loadTeams() {
                 const res = await fetch('/api/admin/teams', { credentials: 'same-origin' });
                 teams = await res.json();
-                // populate team select
-                mapTeam.innerHTML = '';
-                teams.forEach(t => mapTeam.appendChild(new Option(t.name, t.id)));
-                // populate team list UI
                 const teamList = document.getElementById('team-list');
                 if (teamList) {
                     teamList.innerHTML = '';
@@ -892,31 +867,25 @@
                         teamList.appendChild(d);
                     });
                 }
+                const boxTeamSel = document.getElementById('box-team');
+                if (boxTeamSel) {
+                    boxTeamSel.innerHTML = '';
+                    teams.forEach(t => boxTeamSel.appendChild(new Option(t.name, t.id)));
+                }
             }
 
             async function loadServices() {
                 const res = await fetch('/api/admin/services', { credentials: 'same-origin' });
                 services = await res.json();
-                boxService.innerHTML = '';
-                services.forEach(s => boxService.appendChild(new Option(s.name || s.service || s.name, s.id)));
-                // populate mapping service select
-                const mapService = document.getElementById('map-service');
-                if (mapService) {
-                    mapService.innerHTML = '';
-                    services.forEach(s => mapService.appendChild(new Option(s.name || s.service || s.name, s.id)));
+                if (boxService) {
+                    boxService.innerHTML = '';
+                    services.forEach(s => boxService.appendChild(new Option(s.name || s.service || s.name, s.id)));
                 }
             }
 
             async function loadBoxes() {
                 const res = await fetch('/api/admin/boxes', { credentials: 'same-origin' });
                 boxes = await res.json();
-                mapBox.innerHTML = '';
-                boxes.forEach(b => mapBox.appendChild(new Option(b.ip_address + ':' + b.port, b.id)));
-            }
-
-            async function loadMappings() {
-                const res = await fetch('/api/admin/box-mappings', { credentials: 'same-origin' });
-                mappings = await res.json();
             }
 
             function renderBoxes() {
@@ -926,7 +895,9 @@
                     const card = document.createElement('div');
                     card.className = 'card';
                     const title = document.createElement('strong');
-                    title.textContent = `${b.ip_address}:${b.port} (service ${b.service_id})`;
+                    const teamName = (teams.find(x => x.id === b.team_id) || {}).name || b.team_id;
+                    const svcName = (services.find(x => x.id === b.service_id) || {}).name || b.service_id || '';
+                    title.textContent = `${b.ip_address} ${svcName ? '(' + svcName + ')' : ''} — team ${teamName}`;
                     card.appendChild(title);
                     const toolbar = document.createElement('div');
                     toolbar.style.marginTop = '8px';
@@ -951,43 +922,12 @@
                 });
             }
 
-            function renderMappings() {
-                mappingsList.innerHTML = '';
-                if (!mappings || mappings.length === 0) mappingsList.innerHTML = '<div class="card muted">No mappings</div>';
-                mappings.forEach(m => {
-                    const t = teams.find(x => x.id === m.team_id)?.name || m.team_id;
-                    const b = boxes.find(x => x.id === m.scoring_box_id);
-                    const svc = services.find(x => x.id === m.service_id)?.name || m.service_id;
-                    const card = document.createElement('div');
-                    card.className = 'card';
-                    const title = document.createElement('strong');
-                    title.textContent = `Team: ${t} → Box: ${b ? (b.ip_address + ':' + b.port) : m.scoring_box_id} (service: ${svc})`;
-                    card.appendChild(title);
-                    const toolbar = document.createElement('div');
-                    toolbar.style.marginTop = '8px';
-                    toolbar.style.display = 'flex';
-                    toolbar.style.justifyContent = 'flex-end';
-                    const delBtn = document.createElement('button');
-                    delBtn.className = 'btn btn-danger';
-                    delBtn.textContent = 'Unmap';
-                    delBtn.addEventListener('click', async () => {
-                        if (!confirm('Remove mapping?')) return;
-                        const res = await fetch('/api/admin/box-mappings', { method: 'DELETE', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: m.id }) });
-                        if (!res.ok) return alert('Failed to delete mapping');
-                        await loadMappings(); renderMappings();
-                    });
-                    toolbar.appendChild(delBtn);
-                    card.appendChild(toolbar);
-                    mappingsList.appendChild(card);
-                });
-            }
-
             function openBoxEditor(b) {
                 editingBox = b || null;
                 boxEditor.style.display = 'block';
                 boxIp.value = b ? b.ip_address : '';
-                boxPort.value = b ? b.port : '';
-                boxService.value = b ? b.service_id : (services[0] && services[0].id);
+                boxTeam.value = b ? b.team_id : (teams[0] && teams[0].id);
+                boxService.value = b ? b.service_id || '' : '';
             }
 
             function closeBoxEditor() { editingBox = null; boxEditor.style.display = 'none'; }
@@ -996,28 +936,29 @@
             cancelBoxBtn.addEventListener('click', (e) => { e.preventDefault(); closeBoxEditor(); });
             saveBoxBtn.addEventListener('click', async (e) => {
                 e.preventDefault();
-                const payload = { service_id: Number(boxService.value), ip_address: boxIp.value, port: Number(boxPort.value) };
+                const ip = (boxIp.value || '').trim();
+                if (!ip) return alert('Enter box IP');
+                // create or update box with team_id and service_id
+                const payload = { team_id: Number(boxTeam.value || 0), ip_address: ip, service_id: Number(boxService.value || 0) };
                 if (editingBox && editingBox.id) payload.id = editingBox.id;
                 const res = await fetch('/api/admin/boxes', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!res.ok) return alert('Failed to save box');
                 await loadBoxes(); renderBoxes(); closeBoxEditor();
             });
 
-            // Mapping editor logic
-            document.getElementById('save-mapping-btn').addEventListener('click', async (e) => {
-                e.preventDefault();
-                const payload = { team_id: Number(mapTeam.value), scoring_box_id: Number(mapBox.value), service_id: Number(document.getElementById('map-service').value) };
-                const res = await fetch('/api/admin/box-mappings', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                if (!res.ok) return alert('Failed to save mapping');
-                await loadMappings(); renderMappings(); mappingEditor.style.display = 'none';
-            });
-            cancelMappingBtn.addEventListener('click', (e) => { e.preventDefault(); mappingEditor.style.display = 'none'; });
-
-            // quick hook: show mapping editor when clicking on the "Add Mapping" button
-            document.getElementById('add-mapping-btn')?.addEventListener('click', () => { mappingEditor.style.display = 'block'; });
-
             // initial load
             fetchData().catch(err => console.error('box mapping load error', err));
+
+            // Expose a hook so the router can refresh dropdowns when view is shown
+            window.onBoxMappingVisible = async function () {
+                try {
+                    await Promise.all([loadTeams(), loadServices(), loadBoxes()]);
+                    renderBoxes();
+                } catch (e) {
+                    console.error('onBoxMappingVisible failed', e);
+                }
+            };
+
             // Create team handler
             document.getElementById('create-team-btn').addEventListener('click', async (e) => {
                 e.preventDefault();

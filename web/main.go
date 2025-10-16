@@ -154,7 +154,7 @@ func main() {
 	http.Handle("/api/admin/services", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiServices))))
 	http.Handle("/api/admin/teams", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiTeams))))
 	http.Handle("/api/admin/boxes", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiBoxes))))
-	http.Handle("/api/admin/box-mappings", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiBoxMappings))))
+
 	http.Handle("/api/admin/team-members", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleTeamMembers))))
 
 	// Serve static files (e.g., CSS, JS)

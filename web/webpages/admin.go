@@ -222,20 +222,11 @@ func HandleApiBoxes(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(boxes)
 	case http.MethodPost:
-		// Create a scored box (maps IP -> team). Expect { team_id, ip_address, port }
-		var req struct {
-			TeamID    int    `json:"team_id"`
-			IPAddress string `json:"ip_address"`
-			Port      int    `json:"port"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var b structures.ScoringBox
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		var b structures.ScoringBox
-		b.TeamID = req.TeamID
-		b.IPAddress = req.IPAddress
-		b.Port = req.Port
 		if err := sql_wrapper.SaveScoringBox(&b); err != nil {
 			http.Error(w, "Failed to save box: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -252,54 +243,6 @@ func HandleApiBoxes(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := sql_wrapper.DeleteScoringBox(req.ID); err != nil {
 			http.Error(w, "Failed to delete box: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-// Box mappings API
-func HandleApiBoxMappings(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		maps, err := sql_wrapper.GetAllBoxMappings()
-		if err != nil {
-			http.Error(w, "Failed to get mappings: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(maps)
-	case http.MethodPost:
-		// Map a service to an existing scored box. Expect { scoring_box_id, service_id }
-		var req struct {
-			ScoringBoxID int `json:"scoring_box_id"`
-			ServiceID    int `json:"service_id"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		var m structures.BoxMapping
-		m.ScoringBoxID = req.ScoringBoxID
-		m.ServiceID = req.ServiceID
-		if err := sql_wrapper.SaveBoxMapping(&m); err != nil {
-			http.Error(w, "Failed to save mapping: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(m)
-	case http.MethodDelete:
-		var req struct {
-			ID int `json:"id"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		if err := sql_wrapper.DeleteBoxMapping(req.ID); err != nil {
-			http.Error(w, "Failed to delete mapping: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
