@@ -105,8 +105,8 @@ func CreateTables() error {
 		FOREIGN KEY(scored_box_id) REFERENCES scored_boxes(id)
 	);`
 
-	compScoreTable := `
-	CREATE TABLE IF NOT EXISTS competition_scores (
+	compServiceTable := `
+	CREATE TABLE IF NOT EXISTS competition_services (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		team_id INTEGER NOT NULL,
 		service_id INTEGER NOT NULL,
@@ -116,6 +116,26 @@ func CreateTables() error {
 		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY(team_id) REFERENCES teams(id),
 		FOREIGN KEY(service_id) REFERENCES services(id)
+	);`
+
+	compScoresTable := `
+	CREATE TABLE IF NOT EXISTS competition_scores (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		team_id INTEGER NOT NULL,
+		score INTEGER NOT NULL,
+		round INTEGER,
+		description TEXT,
+		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY(team_id) REFERENCES teams(id)
+	);`
+
+	competitionTable := `
+	CREATE TABLE IF NOT EXISTS competition (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		status TEXT NOT NULL DEFAULT 'stopped',
+		scheduled_time DATETIME,
+		started_time DATETIME,
+		stopped_time DATETIME
 	);`
 
 	_, err := db.Exec(servicesTable)
@@ -148,7 +168,7 @@ func CreateTables() error {
 		return err
 	}
 
-	_, err = db.Exec(compScoreTable)
+	_, err = db.Exec(compServiceTable)
 	if err != nil {
 		return err
 	}
@@ -159,6 +179,16 @@ func CreateTables() error {
 	}
 
 	_, err = db.Exec(regexCheckTable)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(competitionTable)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(compScoresTable)
 	if err != nil {
 		return err
 	}
@@ -204,6 +234,17 @@ func CreateTeam(t *structures.Team) error {
 	return err
 }
 
+func DeleteTeam(id int) error {
+	// First, remove all team members
+	_, err := db.Exec("DELETE FROM team_members WHERE team_id = ?", id)
+	if err != nil {
+		return err
+	}
+	// Then delete the team
+	_, err = db.Exec("DELETE FROM teams WHERE id = ?", id)
+	return err
+}
+
 // Team members (map users to teams)
 func AddUserToTeam(teamID, userID int) error {
 	_, err := db.Exec("INSERT OR IGNORE INTO team_members (team_id, user_id) VALUES (?, ?)", teamID, userID)
@@ -212,6 +253,11 @@ func AddUserToTeam(teamID, userID int) error {
 
 func RemoveUserFromTeam(teamID, userID int) error {
 	_, err := db.Exec("DELETE FROM team_members WHERE team_id = ? AND user_id = ?", teamID, userID)
+	return err
+}
+
+func RemoveUserFromAllTeams(userID int) error {
+	_, err := db.Exec("DELETE FROM team_members WHERE user_id = ?", userID)
 	return err
 }
 
@@ -243,6 +289,39 @@ func GetAllUsers() ([]structures.User, error) {
 		var u structures.User
 		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Subject); err != nil {
 			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
+func GetAllUsersWithTeams() ([]structures.User, error) {
+	query := `
+		SELECT u.id, u.email, u.name, u.subject, tm.team_id, t.name as team_name
+		FROM users u
+		LEFT JOIN team_members tm ON u.id = tm.user_id
+		LEFT JOIN teams t ON tm.team_id = t.id
+		ORDER BY u.id ASC
+	`
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var users []structures.User
+	for rows.Next() {
+		var u structures.User
+		var teamID sql.NullInt64
+		var teamName sql.NullString
+		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Subject, &teamID, &teamName); err != nil {
+			return nil, err
+		}
+		if teamID.Valid {
+			tid := int(teamID.Int64)
+			u.TeamID = &tid
+		}
+		if teamName.Valid {
+			u.TeamName = teamName.String
 		}
 		users = append(users, u)
 	}
@@ -442,4 +521,252 @@ func DeleteServiceByID(id int) error {
 
 	_, err = db.Exec("DELETE FROM services WHERE id = ?", id)
 	return err
+}
+
+// =========================
+// Homepage data helpers
+// =========================
+
+// LatestStatus represents the latest up/down status for a team/service
+type LatestStatus struct {
+	TeamID    int
+	ServiceID int
+	IsUp      bool
+}
+
+// ServiceUptime represents uptime percentage for a service
+type ServiceUptime struct {
+	ServiceID int
+	UptimePct float64
+}
+
+// TeamStanding represents total points for a team
+type TeamStanding struct {
+	TeamID int
+	Name   string
+	Points int
+}
+
+// RoundScore represents points per team per round
+type RoundScore struct {
+	Round  int
+	TeamID int
+	Points int
+}
+
+// GetLatestStatuses returns the latest status per team/service based on max round
+func GetLatestStatuses() ([]LatestStatus, error) {
+	// Join with subquery to get latest round per team/service
+	q := `
+		SELECT cs.team_id, cs.service_id, cs.is_up
+		FROM competition_services cs
+		JOIN (
+			SELECT team_id, service_id, MAX(round) AS mr
+			FROM competition_services
+			GROUP BY team_id, service_id
+		) t
+		ON cs.team_id = t.team_id AND cs.service_id = t.service_id AND cs.round = t.mr
+	`
+	rows, err := db.Query(q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []LatestStatus
+	for rows.Next() {
+		var ls LatestStatus
+		var isUpBool bool
+		if err := rows.Scan(&ls.TeamID, &ls.ServiceID, &isUpBool); err != nil {
+			return nil, err
+		}
+		ls.IsUp = isUpBool
+		out = append(out, ls)
+	}
+	return out, nil
+}
+
+// GetServiceUptimePercents returns uptime percentage for each service across all teams/rounds
+func GetServiceUptimePercents() (map[int]float64, error) {
+	q := `
+		SELECT service_id,
+			   SUM(CASE WHEN is_up THEN 1 ELSE 0 END) AS up_count,
+			   COUNT(*) AS total_count
+		FROM competition_services
+		GROUP BY service_id
+	`
+	rows, err := db.Query(q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	m := make(map[int]float64)
+	for rows.Next() {
+		var sid int
+		var upCount, total int
+		if err := rows.Scan(&sid, &upCount, &total); err != nil {
+			return nil, err
+		}
+		if total > 0 {
+			m[sid] = float64(upCount) * 100.0 / float64(total)
+		} else {
+			m[sid] = 0.0
+		}
+	}
+	return m, nil
+}
+
+// GetTeamStandings returns total points per team (1 point per up per record)
+func GetTeamStandings() ([]TeamStanding, error) {
+	q := `
+		SELECT t.id, t.name, COALESCE(SUM(cs.score), 0) AS points
+		FROM teams t
+		LEFT JOIN competition_scores cs ON cs.team_id = t.id
+		GROUP BY t.id, t.name
+		ORDER BY points DESC, t.name ASC
+	`
+	rows, err := db.Query(q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []TeamStanding
+	for rows.Next() {
+		var ts TeamStanding
+		if err := rows.Scan(&ts.TeamID, &ts.Name, &ts.Points); err != nil {
+			return nil, err
+		}
+		out = append(out, ts)
+	}
+	return out, nil
+}
+
+// GetTeamScoresByRound returns points per team per round
+func GetTeamScoresByRound() ([]RoundScore, error) {
+	q := `
+		SELECT round, team_id, SUM(score) AS points
+		FROM competition_scores
+		GROUP BY round, team_id
+		ORDER BY round ASC, team_id ASC
+	`
+	rows, err := db.Query(q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []RoundScore
+	for rows.Next() {
+		var r RoundScore
+		if err := rows.Scan(&r.Round, &r.TeamID, &r.Points); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+// Competition management functions
+
+// GetCompetition returns the current competition state (there should only be one)
+func GetCompetition() (*structures.Competition, error) {
+	row := db.QueryRow("SELECT id, status, scheduled_time, started_time, stopped_time FROM competition ORDER BY id DESC LIMIT 1")
+	var comp structures.Competition
+	var scheduledTime, startedTime, stoppedTime sql.NullString
+	err := row.Scan(&comp.ID, &comp.Status, &scheduledTime, &startedTime, &stoppedTime)
+	if err == sql.ErrNoRows {
+		// No competition exists, create a default one
+		_, err = db.Exec("INSERT INTO competition (status) VALUES ('stopped')")
+		if err != nil {
+			return nil, err
+		}
+		// Fetch the newly created competition
+		return GetCompetition()
+	}
+	if err != nil {
+		return nil, err
+	}
+	comp.ScheduledTime = scheduledTime.String
+	comp.StartedTime = startedTime.String
+	comp.StoppedTime = stoppedTime.String
+	return &comp, nil
+}
+
+// UpdateCompetition updates the competition state
+func UpdateCompetition(comp *structures.Competition) error {
+	if comp == nil {
+		return nil
+	}
+
+	// Get or create the competition
+	existing, err := GetCompetition()
+	if err != nil {
+		return err
+	}
+
+	// Update the existing competition
+	query := "UPDATE competition SET status = ?, scheduled_time = ?, started_time = ?, stopped_time = ? WHERE id = ?"
+	var scheduledTime, startedTime, stoppedTime interface{}
+
+	if comp.ScheduledTime != "" {
+		scheduledTime = comp.ScheduledTime
+	}
+	if comp.StartedTime != "" {
+		startedTime = comp.StartedTime
+	}
+	if comp.StoppedTime != "" {
+		stoppedTime = comp.StoppedTime
+	}
+
+	_, err = db.Exec(query, comp.Status, scheduledTime, startedTime, stoppedTime, existing.ID)
+	return err
+}
+
+// ResetCompetitionServices deletes all competition services
+func ResetCompetitionServices() error {
+	_, err := db.Exec("DELETE FROM competition_services")
+	return err
+}
+
+func GetTeamScore(teamID int) (int, error) {
+	row := db.QueryRow("SELECT SUM(score) FROM competition_scores WHERE team_id = ?", teamID)
+	var score sql.NullInt64
+	err := row.Scan(&score)
+	if err != nil {
+		return 0, err
+	}
+	if score.Valid {
+		return int(score.Int64), nil
+	}
+	return 0, nil
+}
+
+// GetTeamServiceUptimePercents returns uptime percentage for each team/service
+func GetTeamServiceUptimePercents() (map[int]map[int]float64, error) {
+	q := `
+		SELECT team_id, service_id,
+			   SUM(CASE WHEN is_up THEN 1 ELSE 0 END) AS up_count,
+			   COUNT(*) AS total_count
+		FROM competition_services
+		GROUP BY team_id, service_id
+	`
+	rows, err := db.Query(q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	m := make(map[int]map[int]float64)
+	for rows.Next() {
+		var teamID, serviceID, upCount, total int
+		if err := rows.Scan(&teamID, &serviceID, &upCount, &total); err != nil {
+			return nil, err
+		}
+		if _, ok := m[teamID]; !ok {
+			m[teamID] = make(map[int]float64)
+		}
+		if total > 0 {
+			m[teamID][serviceID] = float64(upCount) * 100.0 / float64(total)
+		} else {
+			m[teamID][serviceID] = 0.0
+		}
+	}
+	return m, nil
 }

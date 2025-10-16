@@ -6,6 +6,8 @@ type User struct {
 	Name     string `json:"name"`
 	Subject  string `json:"sub"`
 	Is_Admin bool   `json:"is_admin"`
+	TeamID   *int   `json:"team_id,omitempty"`
+	TeamName string `json:"team_name,omitempty"`
 }
 
 type Service struct {
@@ -46,4 +48,13 @@ type ScoringBox struct {
 	IPAddress string `json:"ip_address"`
 	TeamID    int    `json:"team_id"`
 	ServiceID int    `json:"service_id"`
+}
+
+// Competition represents the current competition state
+type Competition struct {
+	ID            int    `json:"id"`
+	Status        string `json:"status"` // "stopped", "scheduled", "running"
+	ScheduledTime string `json:"scheduled_time,omitempty"`
+	StartedTime   string `json:"started_time,omitempty"`
+	StoppedTime   string `json:"stopped_time,omitempty"`
 }

@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>BlueDevil Engine — Scoring</title>
+	<meta http-equiv="refresh" content="{{.AutoRefreshSec}}">
+	<style>
+		:root {
+			--bg: #0f1724;
+			--card: #0b1220;
+			--accent: #2dd4bf;
+			--muted: #9aa6b2;
+			--text: #e6eef3;
+			--nav: #071029;
+			--border: rgba(255, 255, 255, 0.06);
+		}
+
+		* { box-sizing: border-box; }
+		body {
+			margin: 0;
+			font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+			background: linear-gradient(180deg, #071024 0%, #081827 100%);
+			color: var(--text);
+			min-height: 100vh;
+		}
+		header {
+			background: var(--nav);
+			padding: 12px 20px;
+			display: flex;
+			align-items: center;
+			gap: 20px;
+			box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02)
+		}
+		.brand { font-weight: 700; letter-spacing: 0.4px }
+		nav { display: flex; gap: 8px; margin-left: 16px; }
+		nav a {
+			color: var(--muted);
+			text-decoration: none;
+			padding: 8px 12px;
+			border-radius: 8px;
+			font-weight: 600;
+			font-size: 14px;
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+		}
+		nav a.active { background: linear-gradient(90deg, rgba(45,212,191,0.12), rgba(99,102,241,0.06)); color: var(--accent); box-shadow: inset 0 -2px 0 rgba(0,0,0,0.25) }
+		.spacer { flex: 1 }
+		.auth a { color: var(--text); text-decoration: none; font-weight: 600; }
+		main { padding: 28px; max-width: 1200px; margin: 18px auto; }
+		h1 { margin: 0 0 12px; font-size: 20px; }
+		h2 { margin: 20px 0 8px; font-size: 18px; }
+		.grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+		.card { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border: 1px solid var(--border); padding: 16px; border-radius: 10px; }
+		table { border-collapse: collapse; width: 100%; }
+		th, td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; font-size: 14px; }
+		th { background: rgba(255,255,255,0.02); }
+		.tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); }
+		.up { background: rgba(16,185,129,0.15); color: #34d399; border-color: rgba(16,185,129,0.4); }
+		.down { background: rgba(239,68,68,0.18); color: #fb7185; border-color: rgba(239,68,68,0.4); }
+		.status-icon { width: 16px; height: 16px; vertical-align: middle; }
+		.muted { color: var(--muted); }
+		.small { font-size: 12px; }
+		.chart { width: 100%; height: 240px; }
+		.legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+		.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+		.swatch { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+	</style>
+	<link rel="stylesheet" href="/static/admin.css">
+</head>
+
+<body>
+	<header>
+		<div class="brand">BlueDevil Engine</div>
+			<nav aria-label="Main menu">
+				<a href="/" class="{{if eq .Active "scoring"}}active{{end}}">Scoring</a>
+				<a href="/info" class="{{if eq .Active "info"}}active{{end}}">Info</a>
+				<a href="/injects" class="{{if eq .Active "injects"}}active{{end}}">Injects</a>
+				<a href="/practice" class="{{if eq .Active "practice"}}active{{end}}">Practice</a>
+				{{if .IsAdmin}}
+					<a href="/admin/" title="Admin">Admin</a>
+				{{end}}
+			</nav>
+		<div class="spacer"></div>
+		<div class="auth">
+			{{if .IsLoggedIn}}
+				<a href="/logout" title="Logout">{{.UserName}} (logout)</a>
+			{{else}}
+				<a href="/login-user" title="Login">Login</a>
+			{{end}}
+		</div>
+	</header>
+
+	<main>
+		<div class="page-title">
+			<h1>Competition Status</h1>
+			<div class="small muted">Auto-refreshing every {{.AutoRefreshSec}} seconds</div>
+		</div>
+		{{if not .HasScoring}}
+			<div class="card" style="text-align:center; padding: 28px; margin-top: 12px;">
+				<div style="font-size:16px; color: var(--muted);">Competition has not been started</div>
+			</div>
+		{{else}}
+			<div class="card" style="margin-bottom:18px;">
+				<h2>Service Health</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Team</th>
+							{{range .Services}}
+								<th>{{.Name}}</th>
+							{{end}}
+						</tr>
+					</thead>
+					<tbody>
+						{{range $.Teams}}
+							<tr>
+								<td>{{.Name}}</td>
+								{{range $svc := $.Services}}
+									{{ $isUp := index (index $.LatestStatuses .ID) $svc.ID }}
+									<td>
+										{{if $isUp}}
+											<img class="status-icon" src="/static/up.png" alt="Up" title="{{$svc.Name}} is up" />
+										{{else}}
+											<img class="status-icon" src="/static/down.png" alt="Down" title="{{$svc.Name}} is down" />
+										{{end}}
+									</td>
+								{{end}}
+							</tr>
+						{{end}}
+					</tbody>
+				</table>
+				<div class="small muted" style="margin-top:6px">Latest round status per team/service</div>
+			</div>
+
+				<div class="card" style="margin-bottom:18px;">
+					<h2>Service Uptime (per Team)</h2>
+					<table>
+						<thead>
+							<tr>
+								<th>Team</th>
+								{{range .Services}}
+									<th>{{.Name}}</th>
+								{{end}}
+							</tr>
+						</thead>
+						<tbody>
+							{{range $team := $.Teams}}
+								<tr>
+									<td>{{$team.Name}}</td>
+									{{range $svc := $.Services}}
+										{{ $pct := index (index $.TeamServiceUptime $team.ID) $svc.ID }}
+										{{if ge $pct 80.0}}
+											<td style="background:#193c2b;color:#34d399;font-weight:600">{{printf "%.1f" $pct}}%</td>
+										{{else if ge $pct 60.0}}
+											<td style="background:#3c3c19;color:#facc15;font-weight:600">{{printf "%.1f" $pct}}%</td>
+										{{else}}
+											<td style="background:#3c1919;color:#fb7185;font-weight:600">{{printf "%.1f" $pct}}%</td>
+										{{end}}
+									{{end}}
+								</tr>
+							{{end}}
+						</tbody>
+					</table>
+					<div class="small muted" style="margin-top:6px">Uptime per team/service (green: ≥80%, yellow: ≥60%, red: &lt;60%)</div>
+				</div>
+
+			<div class="card" style="margin-top:12px">
+		<h2>Scores Over Time</h2>
+		<svg class="chart" viewBox="0 0 800 240" preserveAspectRatio="none">
+			<!-- Axes -->
+			<line x1="40" y1="10" x2="40" y2="210" stroke="#ccc" />
+			<line x1="40" y1="210" x2="780" y2="210" stroke="#ccc" />
+			<!-- Grid and labels kept minimal to avoid JS -->
+			{{/* Draw lines per team with distinct colors */}}
+					{{range .Teams}}
+						{{if .Path}}
+						<path d="{{.Path}}" fill="none" stroke="{{.Color}}" stroke-width="2" />
+						{{end}}
+					{{end}}
+		</svg>
+		<div class="legend">
+							{{range .Teams}}
+								<span class="legend-item"><svg width="12" height="12" viewBox="0 0 12 12" class="swatch" aria-hidden="true"><rect x="0" y="0" width="12" height="12" fill="{{.Color}}"/></svg>{{ .Name }}</span>
+							{{end}}
+		</div>
+		<div class="small muted" style="margin-top:6px">Per-round points; simple linear plot</div>
+	</div>
+    <div class="card" style="margin-bottom:18px; margin-top:18px;">
+				<h2>Current Standings</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Rank</th>
+							<th>Team</th>
+							<th>Points</th>
+						</tr>
+					</thead>
+					<tbody>
+						{{range .Standings}}
+							<tr>
+								<td>{{.Rank}}</td>
+								<td>{{.Name}}</td>
+								<td>{{.Points}}</td>
+							</tr>
+						{{end}}
+					</tbody>
+				</table>
+				<div class="small muted" style="margin-top:6px">1 point per service up per round</div>
+			</div>
+
+			{{end}}
+			</main>
+
+	</body>
+	</html>

@@ -198,32 +198,18 @@
 
     <main>
         <section id="view-dashboard" data-view>
-            <div class="hero">
-                <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
-                    <div>
-                        <h1>Dashboard</h1>
-                        <div class="muted">Overview and quick actions</div>
-                        <!-- Add Service button intentionally in Services view below -->
-                    </div>
+            <div class="page-title">
+                <h1>Dashboard</h1>
+                <div class="muted">Overview and service configuration status</div>
+            </div>
 
-                    <div class="grid">
-                        <div class="card">
-                            <strong>System Status</strong>
-                            <div class="muted">All services running</div>
-                        </div>
-                        <div class="card">
-                            <strong>Recent Activity</strong>
-                            <div class="muted">No recent alerts</div>
-                        </div>
-                        <div class="card">
-                            <strong>Quick Links</strong>
-                            <div class="muted">Services · Box Mapping · Scores · Competitions</div>
-                        </div>
-                        <div class="card">
-                            <strong>Statistics</strong>
-                            <div class="muted">--</div>
-                        </div>
-                    </div>
+            <div class="card" style="max-width:100%;margin-top:18px">
+                <h3>Service Configuration Matrix</h3>
+                <div class="muted" style="margin-bottom:12px">Shows which services are configured for each team. Green = Configured with IP mapping, Red = Not configured</div>
+                <div id="service-matrix-container" style="overflow-x:auto">
+                    <div class="muted">Loading service matrix...</div>
+                </div>
+            </div>
         </section>
 
         <section id="view-services" data-view hidden>
@@ -699,23 +685,64 @@
 
         <section id="view-competitions" data-view hidden>
             <div class="page-title">
-                <h1>Competitions</h1>
-                <div class="muted">Create and manage competitions</div>
+                <h1>Competition</h1>
+                <div class="muted">Schedule, start, stop and reset competition</div>
             </div>
-            <div class="card">
-                <strong>Upcoming</strong>
-                <div class="muted">No upcoming competitions</div>
+            
+            <div class="card" style="max-width:800px">
+                <h3>Competition Status</h3>
+                <div id="comp-status" style="margin:12px 0">
+                    <div><strong>Status:</strong> <span id="comp-status-text" class="muted">Loading...</span></div>
+                    <div id="comp-scheduled-time" style="margin-top:6px;display:none">
+                        <strong>Scheduled Time:</strong> <span id="comp-scheduled-text" class="muted"></span>
+                    </div>
+                    <div id="comp-started-time" style="margin-top:6px;display:none">
+                        <strong>Started Time:</strong> <span id="comp-started-text" class="muted"></span>
+                    </div>
+                    <div id="comp-stopped-time" style="margin-top:6px;display:none">
+                        <strong>Stopped Time:</strong> <span id="comp-stopped-text" class="muted"></span>
+                    </div>
+                </div>
+
+                <hr style="margin:18px 0;border-color:rgba(255,255,255,0.04)">
+
+                <h3>Actions</h3>
+                
+                <div style="margin-bottom:18px">
+                    <label style="display:block;margin-bottom:6px"><strong>Schedule Competition</strong></label>
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <input type="datetime-local" id="scheduled-time-input" style="flex:1;max-width:300px">
+                        <button id="schedule-btn" class="btn btn-primary">Schedule</button>
+                    </div>
+                    <div class="muted" style="margin-top:4px">Set a future date and time for the competition to start</div>
+                </div>
+
+                <div style="display:flex;gap:8px;margin-bottom:18px">
+                    <button id="start-btn" class="btn btn-primary">Start Competition</button>
+                    <button id="stop-btn" class="btn btn-ghost">Stop Competition</button>
+                </div>
+
+                <hr style="margin:18px 0;border-color:rgba(255,255,255,0.04)">
+
+                <h3 style="color:#f97316">Danger Zone</h3>
+                <div style="margin-top:12px">
+                    <button id="reset-btn" class="btn btn-danger">Reset Scoring Data</button>
+                    <div class="muted" style="margin-top:6px">This will delete all records from the competition_scores table. This action cannot be undone.</div>
+                </div>
             </div>
         </section>
 
         <section id="view-users" data-view hidden>
             <div class="page-title">
                 <h1>Users</h1>
-                <div class="muted">Manage user accounts</div>
+                <div class="muted">Manage user accounts and team assignments</div>
             </div>
-            <div class="card">
-                <strong>User list</strong>
-                <div class="muted">(placeholder for user management)</div>
+            <div class="card" style="max-width:1000px">
+                <h3>User List</h3>
+                <div class="muted" style="margin-bottom:12px">Users are automatically provisioned when they sign in. Assign them to teams below.</div>
+                <div id="users-list-container" style="margin-top:12px">
+                    <div class="muted">Loading users...</div>
+                </div>
             </div>
         </section>
 
@@ -724,15 +751,32 @@
                 <h1>Teams</h1>
                 <div class="muted">Manage teams</div>
             </div>
-            <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">
-                <div style="flex:1">
-                    <strong>Team list</strong>
-                    <div id="team-list" class="muted">Loading…</div>
+            
+            <div class="card" style="max-width:800px;margin-bottom:18px">
+                <h3>Create New Team</h3>
+                <div style="display:flex;gap:8px;align-items:flex-end;margin-top:12px">
+                    <label style="flex:1">Team name<br><input id="new-team-name" style="width:100%"></label>
+                    <button id="create-team-btn" class="btn btn-primary">Create Team</button>
                 </div>
-                <div style="flex:1;max-width:320px">
-                    <label>New team name<br><input id="new-team-name" style="width:100%"></label>
-                    <div style="margin-top:8px"><button id="create-team-btn" class="btn btn-primary">Create
-                            Team</button></div>
+            </div>
+
+            <div class="card" style="max-width:800px">
+                <h3>Team List</h3>
+                <div id="team-list-container" style="margin-top:12px">
+                    <div class="muted">Loading teams...</div>
+                </div>
+            </div>
+
+            <!-- Team Editor Modal -->
+            <div id="team-editor" class="card" style="display:none;max-width:600px;margin-top:18px">
+                <h3 id="team-editor-title">Edit Team</h3>
+                <div style="margin-top:12px">
+                    <label>Team name<br><input id="edit-team-name" style="width:100%"></label>
+                    <input type="hidden" id="edit-team-id">
+                </div>
+                <div style="margin-top:12px;display:flex;gap:8px">
+                    <button id="save-team-btn" class="btn btn-primary">Save</button>
+                    <button id="cancel-team-btn" class="btn btn-ghost">Cancel</button>
                 </div>
             </div>
         </section>
@@ -798,6 +842,26 @@
                 // If box-mapping view is now active, call optional hook to refresh its data
                 if (targetId === 'view-box-mapping' && typeof window.onBoxMappingVisible === 'function') {
                     try { window.onBoxMappingVisible(); } catch (e) { console.error('onBoxMappingVisible hook failed', e); }
+                }
+
+                // If competitions view is now active, call optional hook to refresh its data
+                if (targetId === 'view-competitions' && typeof window.onCompetitionsVisible === 'function') {
+                    try { window.onCompetitionsVisible(); } catch (e) { console.error('onCompetitionsVisible hook failed', e); }
+                }
+
+                // If teams view is now active, call optional hook to refresh its data
+                if (targetId === 'view-teams' && typeof window.onTeamsVisible === 'function') {
+                    try { window.onTeamsVisible(); } catch (e) { console.error('onTeamsVisible hook failed', e); }
+                }
+
+                // If users view is now active, call optional hook to refresh its data
+                if (targetId === 'view-users' && typeof window.onUsersVisible === 'function') {
+                    try { window.onUsersVisible(); } catch (e) { console.error('onUsersVisible hook failed', e); }
+                }
+
+                // If dashboard view is now active, call optional hook to refresh its data
+                if (targetId === 'view-dashboard' && typeof window.onDashboardVisible === 'function') {
+                    try { window.onDashboardVisible(); } catch (e) { console.error('onDashboardVisible hook failed', e); }
                 }
 
                 // Update active nav
@@ -958,16 +1022,610 @@
                     console.error('onBoxMappingVisible failed', e);
                 }
             };
+        })();
+    </script>
+    <script>
+        // Teams management
+        (function () {
+            const teamListContainer = document.getElementById('team-list-container');
+            const teamEditor = document.getElementById('team-editor');
+            const editTeamName = document.getElementById('edit-team-name');
+            const editTeamId = document.getElementById('edit-team-id');
+            const saveTeamBtn = document.getElementById('save-team-btn');
+            const cancelTeamBtn = document.getElementById('cancel-team-btn');
+
+            let allTeams = [];
+
+            async function loadTeamsList() {
+                try {
+                    const res = await fetch('/api/admin/teams', { credentials: 'same-origin' });
+                    if (!res.ok) throw new Error('Failed to load teams');
+                    allTeams = await res.json();
+                    renderTeamsList();
+                } catch (err) {
+                    console.error('Failed to load teams:', err);
+                    teamListContainer.innerHTML = '<div class="muted">Error loading teams</div>';
+                }
+            }
+
+            function renderTeamsList() {
+                if (!allTeams || allTeams.length === 0) {
+                    teamListContainer.innerHTML = '<div class="muted">No teams yet</div>';
+                    return;
+                }
+
+                teamListContainer.innerHTML = '';
+                allTeams.forEach(team => {
+                    const row = document.createElement('div');
+                    row.style.display = 'flex';
+                    row.style.justifyContent = 'space-between';
+                    row.style.alignItems = 'center';
+                    row.style.padding = '8px';
+                    row.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
+
+                    const nameSpan = document.createElement('strong');
+                    nameSpan.textContent = team.name;
+
+                    const actions = document.createElement('div');
+                    actions.style.display = 'flex';
+                    actions.style.gap = '8px';
+
+                    const editBtn = document.createElement('button');
+                    editBtn.className = 'btn btn-ghost';
+                    editBtn.textContent = 'Edit';
+                    editBtn.addEventListener('click', () => openTeamEditor(team));
+
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'btn btn-danger';
+                    deleteBtn.textContent = 'Delete';
+                    deleteBtn.addEventListener('click', () => deleteTeam(team));
+
+                    actions.appendChild(editBtn);
+                    actions.appendChild(deleteBtn);
+
+                    row.appendChild(nameSpan);
+                    row.appendChild(actions);
+                    teamListContainer.appendChild(row);
+                });
+            }
+
+            function openTeamEditor(team) {
+                editTeamId.value = team.id;
+                editTeamName.value = team.name;
+                teamEditor.style.display = 'block';
+            }
+
+            function closeTeamEditor() {
+                teamEditor.style.display = 'none';
+                editTeamId.value = '';
+                editTeamName.value = '';
+            }
+
+            async function deleteTeam(team) {
+                if (!confirm(`Delete team "${team.name}"? This will also remove all members from this team.`)) return;
+                try {
+                    const res = await fetch('/api/admin/teams', {
+                        method: 'DELETE',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: team.id })
+                    });
+                    if (!res.ok) throw new Error('Failed to delete team');
+                    await loadTeamsList();
+                } catch (err) {
+                    console.error('Failed to delete team:', err);
+                    alert('Failed to delete team: ' + err.message);
+                }
+            }
+
+            saveTeamBtn.addEventListener('click', async () => {
+                const name = editTeamName.value.trim();
+                const id = parseInt(editTeamId.value);
+                if (!name) return alert('Enter team name');
+
+                try {
+                    const res = await fetch('/api/admin/teams', {
+                        method: 'PUT',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id, name })
+                    });
+                    if (!res.ok) throw new Error('Failed to update team');
+                    await loadTeamsList();
+                    closeTeamEditor();
+                } catch (err) {
+                    console.error('Failed to update team:', err);
+                    alert('Failed to update team: ' + err.message);
+                }
+            });
+
+            cancelTeamBtn.addEventListener('click', () => closeTeamEditor());
 
             // Create team handler
-            document.getElementById('create-team-btn').addEventListener('click', async (e) => {
-                e.preventDefault();
-                const name = document.getElementById('new-team-name').value.trim();
-                if (!name) return alert('Enter team name');
-                const res = await fetch('/api/admin/teams', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
-                if (!res.ok) return alert('Failed to create team');
-                await loadTeams();
+            const createTeamBtn = document.getElementById('create-team-btn');
+            const newTeamNameInput = document.getElementById('new-team-name');
+            
+            if (createTeamBtn) {
+                createTeamBtn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    const name = newTeamNameInput.value.trim();
+                    if (!name) return alert('Enter team name');
+                    
+                    try {
+                        const res = await fetch('/api/admin/teams', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name })
+                        });
+                        if (!res.ok) throw new Error('Failed to create team');
+                        newTeamNameInput.value = '';
+                        await loadTeamsList();
+                    } catch (err) {
+                        console.error('Failed to create team:', err);
+                        alert('Failed to create team: ' + err.message);
+                    }
+                });
+            }
+
+            // Load teams when the view becomes visible
+            window.onTeamsVisible = async function () {
+                await loadTeamsList();
+            };
+
+            // Initial load if view is already visible
+            const teamsSection = document.getElementById('view-teams');
+            if (teamsSection && !teamsSection.hasAttribute('hidden')) {
+                loadTeamsList();
+            }
+        })();
+    </script>
+    <script>
+        // Users management
+        (function () {
+            const usersListContainer = document.getElementById('users-list-container');
+
+            let allUsers = [];
+            let allTeams = [];
+
+            async function loadUsersData() {
+                try {
+                    const [usersRes, teamsRes] = await Promise.all([
+                        fetch('/api/admin/users', { credentials: 'same-origin' }),
+                        fetch('/api/admin/teams', { credentials: 'same-origin' })
+                    ]);
+                    if (!usersRes.ok || !teamsRes.ok) throw new Error('Failed to load data');
+                    allUsers = await usersRes.json() || [];
+                    allTeams = await teamsRes.json() || [];
+                    renderUsersList();
+                } catch (err) {
+                    console.error('Failed to load users:', err);
+                    usersListContainer.innerHTML = '<div class="muted">Error loading users</div>';
+                }
+            }
+
+            function renderUsersList() {
+                if (!allUsers || allUsers.length === 0) {
+                    usersListContainer.innerHTML = '<div class="muted">No users yet. Users will be created automatically when they sign in.</div>';
+                    return;
+                }
+
+                const hasTeams = allTeams && allTeams.length > 0;
+
+                // Create a table
+                const table = document.createElement('table');
+                table.style.width = '100%';
+                table.style.borderCollapse = 'collapse';
+
+                // Header
+                const thead = document.createElement('thead');
+                const headerRow = document.createElement('tr');
+                ['Name', 'Email', 'Current Team', 'Assign to Team'].forEach(text => {
+                    const th = document.createElement('th');
+                    th.textContent = text;
+                    th.style.textAlign = 'left';
+                    th.style.padding = '8px';
+                    th.style.borderBottom = '2px solid rgba(255,255,255,0.1)';
+                    headerRow.appendChild(th);
+                });
+                thead.appendChild(headerRow);
+                table.appendChild(thead);
+
+                // Body
+                const tbody = document.createElement('tbody');
+                allUsers.forEach(user => {
+                    const row = document.createElement('tr');
+                    row.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
+
+                    // Name
+                    const nameCell = document.createElement('td');
+                    nameCell.textContent = user.name || '-';
+                    nameCell.style.padding = '8px';
+                    row.appendChild(nameCell);
+
+                    // Email
+                    const emailCell = document.createElement('td');
+                    emailCell.textContent = user.email;
+                    emailCell.style.padding = '8px';
+                    row.appendChild(emailCell);
+
+                    // Current Team
+                    const teamCell = document.createElement('td');
+                    teamCell.textContent = user.team_name || 'No team';
+                    teamCell.style.padding = '8px';
+                    teamCell.className = user.team_name ? '' : 'muted';
+                    row.appendChild(teamCell);
+
+                    // Assign to Team dropdown
+                    const actionCell = document.createElement('td');
+                    actionCell.style.padding = '8px';
+
+                    const select = document.createElement('select');
+                    select.style.width = '100%';
+                    select.style.padding = '4px 8px';
+
+                    if (!hasTeams) {
+                        // No teams configured
+                        const noTeamsOpt = document.createElement('option');
+                        noTeamsOpt.value = '';
+                        noTeamsOpt.textContent = '-- NO TEAMS CONFIGURED --';
+                        noTeamsOpt.disabled = true;
+                        noTeamsOpt.selected = true;
+                        select.appendChild(noTeamsOpt);
+                        select.disabled = true;
+                    } else {
+                        // Add "No team" option
+                        const noTeamOpt = document.createElement('option');
+                        noTeamOpt.value = '0';
+                        noTeamOpt.textContent = '-- No team --';
+                        select.appendChild(noTeamOpt);
+
+                        // Add team options
+                        allTeams.forEach(team => {
+                            const opt = document.createElement('option');
+                            opt.value = team.id;
+                            opt.textContent = team.name;
+                            if (user.team_id === team.id) {
+                                opt.selected = true;
+                            }
+                            select.appendChild(opt);
+                        });
+
+                        // Set current value
+                        if (!user.team_id) {
+                            select.value = '0';
+                        }
+
+                        select.addEventListener('change', async (e) => {
+                            const teamId = parseInt(e.target.value);
+                            await assignUserToTeam(user.id, teamId);
+                        });
+                    }
+
+                    actionCell.appendChild(select);
+                    row.appendChild(actionCell);
+
+                    tbody.appendChild(row);
+                });
+                table.appendChild(tbody);
+
+                usersListContainer.innerHTML = '';
+                usersListContainer.appendChild(table);
+            }
+
+            async function assignUserToTeam(userId, teamId) {
+                try {
+                    const res = await fetch('/api/admin/users', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ user_id: userId, team_id: teamId })
+                    });
+                    if (!res.ok) throw new Error('Failed to assign user');
+                    await loadUsersData(); // Reload to show updated team
+                } catch (err) {
+                    console.error('Failed to assign user:', err);
+                    alert('Failed to assign user: ' + err.message);
+                    await loadUsersData(); // Reload to reset dropdown
+                }
+            }
+
+            // Load users when the view becomes visible
+            window.onUsersVisible = async function () {
+                await loadUsersData();
+            };
+
+            // Initial load if view is already visible
+            const usersSection = document.getElementById('view-users');
+            if (usersSection && !usersSection.hasAttribute('hidden')) {
+                loadUsersData();
+            }
+        })();
+    </script>
+    <script>
+        // Dashboard Service Matrix
+        (function () {
+            const matrixContainer = document.getElementById('service-matrix-container');
+
+            async function loadServiceMatrix() {
+                try {
+                    const res = await fetch('/api/admin/service-matrix', { credentials: 'same-origin' });
+                    if (!res.ok) throw new Error('Failed to load service matrix');
+                    const data = await res.json();
+                    renderServiceMatrix(data);
+                } catch (err) {
+                    console.error('Failed to load service matrix:', err);
+                    matrixContainer.innerHTML = '<div class="muted">Error loading service matrix</div>';
+                }
+            }
+
+            function renderServiceMatrix(data) {
+                const teams = data.teams || [];
+                const services = data.services || [];
+                const boxMap = data.box_map || {};
+
+                if (teams.length === 0 && services.length === 0) {
+                    matrixContainer.innerHTML = '<div class="muted">No teams or services configured yet. Configure teams and services first.</div>';
+                    return;
+                }
+
+                if (teams.length === 0) {
+                    matrixContainer.innerHTML = '<div class="muted">No teams configured yet. Go to Teams tab to add teams.</div>';
+                    return;
+                }
+
+                if (services.length === 0) {
+                    matrixContainer.innerHTML = '<div class="muted">No services configured yet. Go to Services tab to add services.</div>';
+                    return;
+                }
+
+                // Create table
+                const table = document.createElement('table');
+                table.style.width = '100%';
+                table.style.borderCollapse = 'collapse';
+                table.style.minWidth = '600px';
+
+                // Header row with service names
+                const thead = document.createElement('thead');
+                const headerRow = document.createElement('tr');
+                
+                // First column is team name
+                const teamHeader = document.createElement('th');
+                teamHeader.textContent = 'Team / Service';
+                teamHeader.style.textAlign = 'left';
+                teamHeader.style.padding = '12px';
+                teamHeader.style.borderBottom = '2px solid rgba(255,255,255,0.1)';
+                teamHeader.style.fontWeight = '700';
+                teamHeader.style.position = 'sticky';
+                teamHeader.style.left = '0';
+                teamHeader.style.background = 'var(--card)';
+                teamHeader.style.zIndex = '10';
+                headerRow.appendChild(teamHeader);
+
+                // Add service columns
+                services.forEach(service => {
+                    const th = document.createElement('th');
+                    th.textContent = service.name || 'Unnamed Service';
+                    th.style.textAlign = 'center';
+                    th.style.padding = '12px';
+                    th.style.borderBottom = '2px solid rgba(255,255,255,0.1)';
+                    th.style.fontWeight = '700';
+                    th.style.minWidth = '120px';
+                    headerRow.appendChild(th);
+                });
+
+                thead.appendChild(headerRow);
+                table.appendChild(thead);
+
+                // Body rows with teams
+                const tbody = document.createElement('tbody');
+                teams.forEach(team => {
+                    const row = document.createElement('tr');
+                    row.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
+
+                    // Team name cell
+                    const teamCell = document.createElement('td');
+                    teamCell.textContent = team.name;
+                    teamCell.style.padding = '12px';
+                    teamCell.style.fontWeight = '600';
+                    teamCell.style.position = 'sticky';
+                    teamCell.style.left = '0';
+                    teamCell.style.background = 'var(--card)';
+                    teamCell.style.zIndex = '5';
+                    row.appendChild(teamCell);
+
+                    // Service status cells
+                    services.forEach(service => {
+                        const cell = document.createElement('td');
+                        cell.style.textAlign = 'center';
+                        cell.style.padding = '12px';
+
+                        // Check if this team has this service configured
+                        const hasMapping = boxMap[team.id] && boxMap[team.id][service.id];
+
+                        const img = document.createElement('img');
+                        if (hasMapping) {
+                            img.src = '/static/up.png';
+                            img.alt = 'Configured';
+                            img.title = `${service.name} is configured for ${team.name} (IP: ${hasMapping.ip_address})`;
+                        } else {
+                            img.src = '/static/down.png';
+                            img.alt = 'Not configured';
+                            img.title = `${service.name} is NOT configured for ${team.name}`;
+                        }
+                        img.style.width = '24px';
+                        img.style.height = '24px';
+                        img.style.display = 'inline-block';
+
+                        cell.appendChild(img);
+                        row.appendChild(cell);
+                    });
+
+                    tbody.appendChild(row);
+                });
+
+                table.appendChild(tbody);
+
+                matrixContainer.innerHTML = '';
+                matrixContainer.appendChild(table);
+            }
+
+            // Load matrix when dashboard becomes visible
+            window.onDashboardVisible = async function () {
+                await loadServiceMatrix();
+            };
+
+            // Initial load if dashboard is already visible
+            const dashboardSection = document.getElementById('view-dashboard');
+            if (dashboardSection && !dashboardSection.hasAttribute('hidden')) {
+                loadServiceMatrix();
+            }
+        })();
+    </script>
+    <script>
+        // Competition management
+        (function () {
+            const statusText = document.getElementById('comp-status-text');
+            const scheduledTimeDiv = document.getElementById('comp-scheduled-time');
+            const scheduledText = document.getElementById('comp-scheduled-text');
+            const startedTimeDiv = document.getElementById('comp-started-time');
+            const startedText = document.getElementById('comp-started-text');
+            const stoppedTimeDiv = document.getElementById('comp-stopped-time');
+            const stoppedText = document.getElementById('comp-stopped-text');
+            const scheduledTimeInput = document.getElementById('scheduled-time-input');
+            const scheduleBtn = document.getElementById('schedule-btn');
+            const startBtn = document.getElementById('start-btn');
+            const stopBtn = document.getElementById('stop-btn');
+            const resetBtn = document.getElementById('reset-btn');
+
+            let currentCompetition = null;
+
+            async function loadCompetition() {
+                try {
+                    const res = await fetch('/api/admin/competition', { credentials: 'same-origin' });
+                    if (!res.ok) throw new Error('Failed to load competition');
+                    currentCompetition = await res.json();
+                    updateUI();
+                } catch (err) {
+                    console.error('Failed to load competition:', err);
+                    statusText.textContent = 'Error loading competition';
+                }
+            }
+
+            function updateUI() {
+                if (!currentCompetition) return;
+
+                // Update status with color coding
+                const status = currentCompetition.status || 'stopped';
+                statusText.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+                
+                if (status === 'running') {
+                    statusText.style.color = '#10b981';
+                } else if (status === 'scheduled') {
+                    statusText.style.color = '#f59e0b';
+                } else {
+                    statusText.style.color = '#f97316';
+                }
+
+                // Show/hide time fields based on what's available
+                if (currentCompetition.scheduled_time) {
+                    scheduledTimeDiv.style.display = 'block';
+                    scheduledText.textContent = formatDateTime(currentCompetition.scheduled_time);
+                } else {
+                    scheduledTimeDiv.style.display = 'none';
+                }
+
+                if (currentCompetition.started_time) {
+                    startedTimeDiv.style.display = 'block';
+                    startedText.textContent = formatDateTime(currentCompetition.started_time);
+                } else {
+                    startedTimeDiv.style.display = 'none';
+                }
+
+                if (currentCompetition.stopped_time) {
+                    stoppedTimeDiv.style.display = 'block';
+                    stoppedText.textContent = formatDateTime(currentCompetition.stopped_time);
+                } else {
+                    stoppedTimeDiv.style.display = 'none';
+                }
+
+                // Enable/disable buttons based on status
+                startBtn.disabled = status === 'running';
+                stopBtn.disabled = status === 'stopped';
+            }
+
+            function formatDateTime(dateStr) {
+                if (!dateStr) return '';
+                try {
+                    const date = new Date(dateStr);
+                    return date.toLocaleString();
+                } catch (e) {
+                    return dateStr;
+                }
+            }
+
+            async function performAction(action, extraData = {}) {
+                try {
+                    const payload = { action, ...extraData };
+                    const res = await fetch('/api/admin/competition', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!res.ok) throw new Error('Failed to ' + action);
+                    await loadCompetition();
+                    return true;
+                } catch (err) {
+                    console.error('Failed to ' + action + ':', err);
+                    alert('Failed to ' + action + ': ' + err.message);
+                    return false;
+                }
+            }
+
+            scheduleBtn.addEventListener('click', async () => {
+                const scheduledTime = scheduledTimeInput.value;
+                if (!scheduledTime) {
+                    alert('Please select a date and time');
+                    return;
+                }
+                // Convert to ISO format
+                const isoTime = new Date(scheduledTime).toISOString();
+                if (await performAction('schedule', { scheduled_time: isoTime })) {
+                    scheduledTimeInput.value = '';
+                }
             });
+
+            startBtn.addEventListener('click', async () => {
+                if (confirm('Start the competition now?')) {
+                    await performAction('start');
+                }
+            });
+
+            stopBtn.addEventListener('click', async () => {
+                if (confirm('Stop the competition?')) {
+                    await performAction('stop');
+                }
+            });
+
+            resetBtn.addEventListener('click', async () => {
+                if (confirm('Are you sure you want to reset all scoring data? This will delete all records from the competition_scores table. This action CANNOT be undone!')) {
+                    if (await performAction('reset')) {
+                        alert('Scoring data has been reset successfully.');
+                    }
+                }
+            });
+
+            // Load competition when view becomes visible
+            window.onCompetitionsVisible = async function () {
+                await loadCompetition();
+            };
+
+            // Initial load if the view is already visible
+            const compSection = document.getElementById('view-competitions');
+            if (compSection && !compSection.hasAttribute('hidden')) {
+                loadCompetition();
+            }
         })();
     </script>
 </body>

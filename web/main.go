@@ -121,8 +121,9 @@ func main() {
 		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
 	}
 
-	http.HandleFunc("/", handleHome)
+	http.HandleFunc("/", webpages.HandleHomepage)
 	http.HandleFunc("/login", handleLogin)
+	http.HandleFunc("/login-user", handleLoginUser) // login for user, but does not have redirect cookie
 	http.HandleFunc("/callback", handleCallback)
 	http.Handle("/dashboard", AuthMiddleware(http.HandlerFunc(handleDashboard)))
 	http.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
@@ -154,6 +155,9 @@ func main() {
 	http.Handle("/api/admin/services", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiServices))))
 	http.Handle("/api/admin/teams", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiTeams))))
 	http.Handle("/api/admin/boxes", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiBoxes))))
+	http.Handle("/api/admin/users", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiUsers))))
+	http.Handle("/api/admin/competition", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiCompetition))))
+	http.Handle("/api/admin/service-matrix", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiServiceMatrix))))
 
 	http.Handle("/api/admin/team-members", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleTeamMembers))))
 
@@ -164,8 +168,17 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8000", nil))
 }
 
-func handleHome(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, `<a href="/login">Log in with OIDC</a>`)
+func handleLoginUser(w http.ResponseWriter, r *http.Request) {
+	// set redirect cookie to /
+	http.SetCookie(w, &http.Cookie{
+		Name:     "redirect_to",
+		Value:    "/",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false, // set false for localhost dev
+		MaxAge:   300,   // 5 minutes
+	})
+	http.Redirect(w, r, "/login", http.StatusFound)
 }
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 )
 
 func HandleAdminDashboard(w http.ResponseWriter, r *http.Request) {
@@ -151,6 +152,35 @@ func HandleApiTeams(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(t)
+	case http.MethodPut:
+		var t structures.Team
+		if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if t.ID == 0 {
+			http.Error(w, "Team ID is required for update", http.StatusBadRequest)
+			return
+		}
+		if err := sql_wrapper.CreateTeam(&t); err != nil {
+			http.Error(w, "Failed to update team: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(t)
+	case http.MethodDelete:
+		var req struct {
+			ID int `json:"id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := sql_wrapper.DeleteTeam(req.ID); err != nil {
+			http.Error(w, "Failed to delete team: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -249,4 +279,159 @@ func HandleApiBoxes(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+// Users API
+func HandleApiUsers(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		users, err := sql_wrapper.GetAllUsersWithTeams()
+		if err != nil {
+			http.Error(w, "Failed to get users: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(users)
+	case http.MethodPost:
+		// Assign user to team
+		var req struct {
+			UserID int `json:"user_id"`
+			TeamID int `json:"team_id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Remove user from any existing team first
+		if err := sql_wrapper.RemoveUserFromAllTeams(req.UserID); err != nil {
+			http.Error(w, "Failed to remove user from teams: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Add user to new team if team_id > 0
+		if req.TeamID > 0 {
+			if err := sql_wrapper.AddUserToTeam(req.TeamID, req.UserID); err != nil {
+				http.Error(w, "Failed to add user to team: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// Competition API
+func HandleApiCompetition(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		comp, err := sql_wrapper.GetCompetition()
+		if err != nil {
+			http.Error(w, "Failed to get competition: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(comp)
+	case http.MethodPost:
+		var req struct {
+			Action        string `json:"action"` // "schedule", "start", "stop", "reset"
+			ScheduledTime string `json:"scheduled_time,omitempty"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		comp, err := sql_wrapper.GetCompetition()
+		if err != nil {
+			http.Error(w, "Failed to get competition: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		switch req.Action {
+		case "schedule":
+			comp.Status = "scheduled"
+			comp.ScheduledTime = req.ScheduledTime
+		case "start":
+			comp.Status = "running"
+			comp.StartedTime = time.Now().Format(time.RFC3339)
+		case "stop":
+			comp.Status = "stopped"
+			comp.StoppedTime = time.Now().Format(time.RFC3339)
+		case "reset":
+			if err := sql_wrapper.ResetCompetitionServices(); err != nil {
+				http.Error(w, "Failed to reset services: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{"message": "Services reset successfully"})
+			return
+		default:
+			http.Error(w, "Invalid action", http.StatusBadRequest)
+			return
+		}
+
+		if err := sql_wrapper.UpdateCompetition(comp); err != nil {
+			http.Error(w, "Failed to update competition: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(comp)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// Service Matrix API - returns data for the dashboard service configuration matrix
+func HandleApiServiceMatrix(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get all teams, services, and scoring boxes
+	teams, err := sql_wrapper.GetAllTeams()
+	if err != nil {
+		http.Error(w, "Failed to get teams: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	services, err := sql_wrapper.GetAllServices()
+	if err != nil {
+		http.Error(w, "Failed to get services: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	boxes, err := sql_wrapper.GetAllScoringBoxes()
+	if err != nil {
+		http.Error(w, "Failed to get boxes: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Build a map of team_id -> service_id -> box for quick lookup
+	boxMap := make(map[int]map[int]*structures.ScoringBox)
+	for i := range boxes {
+		box := &boxes[i]
+		if _, exists := boxMap[box.TeamID]; !exists {
+			boxMap[box.TeamID] = make(map[int]*structures.ScoringBox)
+		}
+		boxMap[box.TeamID][box.ServiceID] = box
+	}
+
+	// Build response
+	response := struct {
+		Teams    []structures.Team                      `json:"teams"`
+		Services []structures.Service                   `json:"services"`
+		BoxMap   map[int]map[int]*structures.ScoringBox `json:"box_map"`
+	}{
+		Teams:    teams,
+		Services: services,
+		BoxMap:   boxMap,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
