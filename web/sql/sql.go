@@ -111,7 +111,7 @@ func CreateTables() error {
 		team_id INTEGER NOT NULL,
 		service_id INTEGER NOT NULL,
 		is_up BOOLEAN NOT NULL,
-		errors TEXT,
+		output TEXT,
 		round INTEGER NOT NULL,
 		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY(team_id) REFERENCES teams(id),
