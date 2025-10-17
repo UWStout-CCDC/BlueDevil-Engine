@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Please sign in</title>
+    <style>
+        body {
+            font-family: Inter, Arial, sans-serif;
+            background: #071029;
+            color: #e6eef3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0
+        }
+
+        .box {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 28px;
+            border-radius: 8px;
+            max-width: 600px;
+            width: 90%;
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6)
+        }
+
+        a.button {
+            display: inline-block;
+            padding: 10px 14px;
+            background: #0ea5a0;
+            color: #042024;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600
+        }
+
+        .muted {
+            color: #9aa6b2
+        }
+    </style>
+</head>
+
+<body>
+    <div class="box">
+        <h1>Please sign in</h1>
+        <p class="muted">You must be signed in to access this page. Signing in will not automatically grant admin
+            privileges.</p>
+        <p>
+            <a class="button" href="/login">Sign in with OIDC</a>
+            <a style="margin-left:8px; color:var(--muted)" href="/">Return to homepage</a>
+        </p>
+    </div>
+</body>
+
+</html>

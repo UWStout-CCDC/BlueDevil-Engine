@@ -722,8 +722,47 @@ func UpdateCompetition(comp *structures.Competition) error {
 
 // ResetCompetitionServices deletes all competition services
 func ResetCompetitionServices() error {
-	_, err := db.Exec("DELETE FROM competition_services")
-	return err
+	if _, err := db.Exec("DELETE FROM competition_services"); err != nil {
+		return err
+	}
+
+	if _, err := db.Exec("DELETE FROM competition_scores"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ResetAllScoringData clears all competition-related data: scores, service status records,
+// individual practice scores, and service checks (including regex checks). It also
+// resets the competition status to 'stopped'. Use with care.
+func ResetAllScoringData() error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	// Clear competition scores and service status history
+	if _, err = tx.Exec("DELETE FROM competition_scores"); err != nil {
+		return err
+	}
+	if _, err = tx.Exec("DELETE FROM competition_services"); err != nil {
+		return err
+	}
+
+	// Reset competition metadata to stopped and clear times
+	if _, err = tx.Exec("UPDATE competition SET status = 'stopped', scheduled_time = NULL, started_time = NULL, stopped_time = NULL"); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func GetTeamScore(teamID int) (int, error) {
@@ -769,4 +808,26 @@ func GetTeamServiceUptimePercents() (map[int]map[int]float64, error) {
 		}
 	}
 	return m, nil
+}
+
+// GetUserTeamBySubject returns the team (if any) that the user identified by the
+// given subject belongs to. If the user is not a member of any team, (nil, nil)
+// is returned.
+func GetUserTeamBySubject(subject string) (*structures.Team, error) {
+	row := db.QueryRow(`
+		SELECT t.id, t.name
+		FROM teams t
+		JOIN team_members tm ON t.id = tm.team_id
+		JOIN users u ON u.id = tm.user_id
+		WHERE u.subject = ?
+		LIMIT 1
+	`, subject)
+	var t structures.Team
+	if err := row.Scan(&t.ID, &t.Name); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &t, nil
 }

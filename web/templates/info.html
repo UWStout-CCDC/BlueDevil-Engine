@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BlueDevil Engine — Info</title>
+    <style>
+        /* theme aligned with homepage */
+        :root {
+            --bg: #0f1724;
+            --card: #0b1220;
+            --accent: #2dd4bf;
+            --muted: #9aa6b2;
+            --text: #e6eef3;
+            --nav: #071029;
+            --border: rgba(255, 255, 255, 0.06);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+            background: linear-gradient(180deg, #071024 0%, #081827 100%);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        header {
+            background: var(--nav);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02)
+        }
+
+        .brand {
+            font-weight: 700;
+            letter-spacing: 0.4px
+        }
+
+        nav {
+            display: flex;
+            gap: 8px;
+            margin-left: 16px
+        }
+
+        nav a {
+            color: var(--muted);
+            text-decoration: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px
+        }
+
+        nav a.active {
+            background: linear-gradient(90deg, rgba(45, 212, 191, 0.12), rgba(99, 102, 241, 0.06));
+            color: var(--accent)
+        }
+
+        .spacer {
+            flex: 1
+        }
+
+        .auth a {
+            color: var(--text);
+            text-decoration: none;
+            font-weight: 600
+        }
+
+
+
+        /* theme aligned with homepage */
+        :root {
+            --bg: #0f1724;
+            --card: #0b1220;
+            --accent: #2dd4bf;
+            --muted: #9aa6b2;
+            --text: #e6eef3;
+            --nav: #071029;
+            --border: rgba(255, 255, 255, 0.06);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+            background: linear-gradient(180deg, #071024 0%, #081827 100%);
+            color: var(--text);
+            min-height: 100vh
+        }
+
+        header {
+            background: var(--nav);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02)
+        }
+
+        .brand {
+            font-weight: 700;
+            letter-spacing: 0.4px
+        }
+
+        nav {
+            display: flex;
+            gap: 8px;
+            margin-left: 16px
+        }
+
+        nav a {
+            color: var(--muted);
+            text-decoration: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px
+        }
+
+        nav a.active {
+            background: linear-gradient(90deg, rgba(45, 212, 191, 0.12), rgba(99, 102, 241, 0.06));
+            color: var(--accent)
+        }
+
+        .spacer {
+            flex: 1
+        }
+
+        .auth a {
+            color: var(--text);
+            text-decoration: none;
+            font-weight: 600
+        }
+
+        main {
+            padding: 28px;
+            max-width: 1200px;
+            margin: 18px auto
+        }
+
+        .card {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01));
+            border: 1px solid var(--border);
+            padding: 16px;
+            border-radius: 10px;
+            margin-bottom: 14px
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%
+        }
+
+        th,
+        td {
+            border: 1px solid var(--border);
+            padding: 6px 8px;
+            text-align: left;
+            font-size: 14px
+        }
+
+        th {
+            background: rgba(255, 255, 255, 0.02)
+        }
+
+        .muted {
+            color: var(--muted)
+        }
+
+        .notice {
+            padding: 12px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border)
+        }
+    </style>
+    <link rel="stylesheet" href="/static/admin.css">
+</head>
+
+<body>
+    <header>
+        <div class="brand">BlueDevil Engine</div>
+        <nav aria-label="Main menu">
+            <a href="/" class="{{if eq .Active " scoring"}}active{{end}}">Scoring</a>
+            <a href="/info" class="{{if eq .Active " info"}}active{{end}}">Info</a>
+            <a href="/injects" class="{{if eq .Active " injects"}}active{{end}}">Injects</a>
+            <a href="/practice" class="{{if eq .Active " practice"}}active{{end}}">Practice</a>
+            {{if .IsAdmin}}<a href="/admin/">Admin</a>{{end}}
+        </nav>
+        <div class="spacer"></div>
+        <div class="auth">
+            {{if .IsLoggedIn}}
+            <a href="/logout">{{.UserName}} (logout)</a>
+            {{else}}
+            <a href="/login-user">Login</a>
+            {{end}}
+        </div>
+    </header>
+
+    <main>
+        <div class="card">
+            <h2>Info</h2>
+            <p class="muted">Service IP scheme, Default passwords, and per-team environment logins</p>
+        </div>
+
+        {{if eq .TeamID 0}}
+        <div class="card">
+            <div class="notice">You are not apart of a team please reach out to Cyber@Stout Staff</div>
+        </div>
+        {{else}}
+
+        <div class="card">
+            <h3>IP addressing</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Service</th>
+                        <th>Internal IP</th>
+                        <th>NAT IP</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .ServiceIPScheme}}
+                    <tr>
+                        <td>{{.service}}</td>
+                        <td>{{.internal}}</td>
+                        <td>{{.nat}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>Default Passwords</h3>
+            {{range $group, $boxes := .GroupedPasswords}}
+            <h4 style="color:var(--accent); margin-top:12px">{{$group}}</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Box</th>
+                        <th>OS</th>
+                        <th>IP</th>
+                        <th>Username</th>
+                        <th>Password</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range $i, $box := $boxes}}
+                    {{ $logins := index $box "logins" }}
+                    {{ $rowspan := len $logins }}
+                    {{range $j, $ln := $logins}}
+                    <tr>
+                        {{if eq $j 0}}
+                        <td rowspan="{{$rowspan}}">{{index $box "box"}}</td>
+                        <td rowspan="{{$rowspan}}">{{index $box "os"}}</td>
+                        <td rowspan="{{$rowspan}}">{{index $box "ip"}}</td>
+                        {{end}}
+                        <td>{{$ln.Username}}</td>
+                        <td>{{$ln.Password}}</td>
+                    </tr>
+                    {{end}}
+                    {{end}}
+                </tbody>
+            </table>
+            {{end}}
+        </div>
+
+        <div class="card">
+            <h3>Environment Logins</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Service</th>
+                        <th>URL</th>
+                        <th>Username</th>
+                        <th>Password</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .EnvLogins}}
+                    <tr>
+                        <td>{{.service}}</td>
+                        <td>{{.url}}</td>
+                        <td>{{.username}}</td>
+                        <td>{{.password}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+
+        {{end}}
+
+    </main>
+
+</body>
+
+</html>

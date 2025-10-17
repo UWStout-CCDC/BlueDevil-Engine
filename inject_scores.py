@@ -3,10 +3,27 @@ import random
 import time
 import argparse
 import sys
+import math
 
 DB_PATH = "web/blue_devil.db"  # Adjust path if needed
 
-def inject_competition_services(num_teams=3, num_services=3):
+def inject_competition_services(num_teams=3, num_services=3, base_prob=0.5, noise_sigma=0.15,
+                                service_bias_sigma=0.05, team_bias_sigma=0.05, round_sigma=0.03,
+                                seed=None):
+    """
+    Inject competition service up/down rows with configurable randomness.
+
+    Parameters:
+    - base_prob: base probability that a service is up (0..1)
+    - noise_sigma: per-sample gaussian noise added to probability
+    - service_bias_sigma: per-service bias (gaussian) added to probability
+    - team_bias_sigma: per-team bias (gaussian) added to probability
+    - round_sigma: amplitude of a small sinusoidal round-based fluctuation
+    - seed: optional random seed for reproducibility
+    """
+    if seed is not None:
+        random.seed(seed)
+
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
@@ -64,12 +81,30 @@ def inject_competition_services(num_teams=3, num_services=3):
     # pick a random number for how many rounds to inject
     num_rounds = random.randint(1, 200)
 
+    # generate per-service and per-team biases to introduce structured noise
+    service_biases = {sid: random.gauss(0, service_bias_sigma) for sid in service_ids}
+    team_biases = {tid: random.gauss(0, team_bias_sigma) for tid in team_ids}
+    # random phase for round fluctuation
+    round_phase = random.random() * 2 * math.pi
+
     # For every round loop through all of the teams and services, and inject a random status
     for round_num in range(1, num_rounds + 1):
         for team_id in team_ids:
             for service_id in service_ids:
-                status = random.choice(["up", "down"])
-                desc = f"Injected service status for team {team_id} service {service_id} round {round_num}"
+                # Build probability with structured noise
+                p = base_prob
+                p += service_biases.get(service_id, 0)
+                p += team_biases.get(team_id, 0)
+                # small round-based sinusoidal fluctuation so services oscillate a bit over rounds
+                p += math.sin(round_num * 0.1 + round_phase) * round_sigma
+                # per-sample Gaussian noise
+                p += random.gauss(0, noise_sigma)
+                # clamp probability to avoid extremes
+                p = max(0.01, min(0.99, p))
+
+                status = "up" if random.random() < p else "down"
+                desc = (f"Injected service status for team {team_id} service {service_id} round {round_num} "
+                        f"(p={p:.2f})")
                 cur.execute(
                     "INSERT INTO competition_services (team_id, service_id, is_up, output, round, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
                     (team_id, service_id, status == "up", desc, round_num, time.strftime("%Y-%m-%d %H:%M:%S"))

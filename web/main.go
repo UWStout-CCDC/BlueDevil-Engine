@@ -35,6 +35,8 @@ var (
 	adminGroup string
 )
 
+// Note: request user context key is provided by the webpages package (webpages.CtxUserKey)
+
 func generateState() (string, error) {
 	b := make([]byte, 32)
 	_, err := rand.Read(b)
@@ -125,7 +127,6 @@ func main() {
 	http.HandleFunc("/login", handleLogin)
 	http.HandleFunc("/login-user", handleLoginUser) // login for user, but does not have redirect cookie
 	http.HandleFunc("/callback", handleCallback)
-	http.Handle("/dashboard", AuthMiddleware(http.HandlerFunc(handleDashboard)))
 	http.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
 		// Clear the ID token cookie
 		http.SetCookie(w, &http.Cookie{
@@ -140,6 +141,10 @@ func main() {
 	})
 
 	http.HandleFunc("/scoreboard", handleScoreboard)
+
+	// Public standalone info page (derived from homepage)
+	// Use AuthPromptMiddleware so unauthenticated users see a friendly login prompt
+	http.Handle("/info", AuthPromptMiddleware(http.HandlerFunc(webpages.HandleInfoPage)))
 
 	// Admin routes
 	http.Handle("/admin/", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleAdminDashboard))))
@@ -309,7 +314,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Redirect to the originally requested page via the redirect_to cookie, if they dont have it go to /dashboard
-	redirectTo := "/dashboard"
+	redirectTo := "/"
 	if redirectCookie, err := r.Cookie("redirect_to"); err == nil {
 		if redirectCookie.Value != "" {
 			redirectTo = redirectCookie.Value
@@ -329,7 +334,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleDashboard(w http.ResponseWriter, r *http.Request) {
-	user := r.Context().Value("user").(structures.User)
+	user := r.Context().Value(webpages.CtxUserKey).(structures.User)
 	fmt.Fprintf(w, "Welcome, %s!", user.Name)
 }
 
@@ -395,7 +400,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Add user info to context
-		ctx = context.WithValue(r.Context(), "user", structures.User{
+		ctx = context.WithValue(r.Context(), webpages.CtxUserKey, structures.User{
 			Email:    claims.Email,
 			Name:     claims.Name,
 			Subject:  claims.Subject,
@@ -405,9 +410,92 @@ func AuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// AuthPromptMiddleware behaves like AuthMiddleware but instead of redirecting to /login
+// when there is no or an invalid token, it serves a friendly login prompt page so
+// the user can choose to sign in or return home. This is intended for user-facing
+// pages where forcing an OIDC redirect is undesirable.
+func AuthPromptMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("id_token")
+		if err != nil || cookie.Value == "" {
+			// Serve a login prompt template instead of redirecting
+			w.WriteHeader(http.StatusUnauthorized)
+			//set the redirect_to cookie to the current page
+			http.SetCookie(w, &http.Cookie{
+				Name:     "redirect_to",
+				Value:    r.URL.Path,
+				Path:     "/",
+				HttpOnly: true,
+				Secure:   false, // set false for localhost dev
+				MaxAge:   3600,  // 1 hour
+			})
+			http.ServeFile(w, r, "templates/login_prompt.html")
+			return
+		}
+
+		ctx := r.Context()
+		verifier := provider.Verifier(oidcConfig)
+		idToken, err := verifier.Verify(ctx, cookie.Value)
+		if err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			http.SetCookie(w, &http.Cookie{
+				Name:     "redirect_to",
+				Value:    r.URL.Path,
+				Path:     "/",
+				HttpOnly: true,
+				Secure:   false, // set false for localhost dev
+				MaxAge:   3600,  // 1 hour
+			})
+			http.ServeFile(w, r, "templates/login_prompt.html")
+			return
+		}
+
+		// Extract claims (email/name/groups). We'll use them to populate the user.
+		var claims struct {
+			Email  string   `json:"email"`
+			Name   string   `json:"name"`
+			Groups []string `json:"groups"`
+			Sub    string   `json:"sub"`
+		}
+		if err := idToken.Claims(&claims); err != nil {
+			// show prompt if claims can't be parsed
+			w.WriteHeader(http.StatusUnauthorized)
+			http.SetCookie(w, &http.Cookie{
+				Name:     "redirect_to",
+				Value:    r.URL.Path,
+				Path:     "/",
+				HttpOnly: true,
+				Secure:   false, // set false for localhost dev
+				MaxAge:   3600,  // 1 hour
+			})
+			http.ServeFile(w, r, "templates/login_prompt.html")
+			return
+		}
+
+		isAdmin := false
+		if adminGroup != "" {
+			for _, g := range claims.Groups {
+				if g == adminGroup {
+					isAdmin = true
+					break
+				}
+			}
+		}
+
+		user := structures.User{
+			Email:    claims.Email,
+			Name:     claims.Name,
+			Subject:  claims.Sub,
+			Is_Admin: isAdmin,
+		}
+		ctx = context.WithValue(ctx, webpages.CtxUserKey, user)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 func AdminAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user := r.Context().Value("user").(structures.User)
+		user := r.Context().Value(webpages.CtxUserKey).(structures.User)
 		// Check if the user is an admin
 		if !user.Is_Admin {
 			http.Error(w, "Forbidden: Admins only", http.StatusForbidden)

@@ -1,0 +1,90 @@
+{
+    "service_ip_scheme": [
+        {
+            "service": "Service-A",
+            "internal_ip": "172.20.240.10",
+            "nat_template": "10.10.{{ add 39 team }}.9"
+        },
+        {
+            "service": "Service-B",
+            "internal_ip": "172.20.240.20",
+            "nat_template": "10.10.{{ add 39 team }}.10"
+        }
+    ],
+    "default_passwords": [
+        {
+            "box": "Internal-DC",
+            "group": "Internal",
+            "os": "Server 2019 Std",
+            "ip": "172.20.240.10",
+            "logins": [
+                {
+                    "username": "administrator",
+                    "password": "!changeme123"
+                }
+            ]
+        },
+        {
+            "box": "Internal-DNS",
+            "group": "Internal",
+            "os": "Debian 10",
+            "ip": "172.20.240.20",
+            "logins": [
+                {
+                    "username": "root",
+                    "password": "Pa$$w0rd"
+                },
+                {
+                    "username": "debian",
+                    "password": "Pa$$w0rd"
+                }
+            ]
+        },
+        {
+            "box": "User-Web",
+            "group": "User",
+            "os": "Ubuntu 18 Web",
+            "ip": "172.20.242.10",
+            "logins": [
+                {
+                    "username": "sysadmin",
+                    "password": "Pa$$w0rd"
+                }
+            ]
+        },
+        {
+            "box": "Public-Splunk",
+            "group": "Public",
+            "os": "Splunk 9.1.1",
+            "ip": "172.20.241.20",
+            "logins": [
+                {
+                    "username": "root",
+                    "password": "!Pa$$w0rd"
+                },
+                {
+                    "username": "splunkuser",
+                    "password": "Pa$$w0rd"
+                },
+                {
+                    "username": "admin",
+                    "password": "!changeme123"
+                }
+            ]
+        }
+    ],
+    "env_logins_templates": [
+        {
+            "service": "Service-A",
+            "url_template": "https://service-a.team{team}.example.com",
+            "username_template": "team{team}_servicea_user",
+            "password_template": "pwd-{team}-servicea"
+        },
+        {
+            "service": "Service-B",
+            "url_template": "https://service-b.team{team}.example.com",
+            "username_template": "team{team}_serviceb_user",
+            "password_template": "pwd-{team}-serviceb"
+        }
+    ]
+}

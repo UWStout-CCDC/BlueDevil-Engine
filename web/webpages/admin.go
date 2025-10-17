@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -361,12 +362,13 @@ func HandleApiCompetition(w http.ResponseWriter, r *http.Request) {
 			comp.Status = "stopped"
 			comp.StoppedTime = time.Now().Format(time.RFC3339)
 		case "reset":
-			if err := sql_wrapper.ResetCompetitionServices(); err != nil {
-				http.Error(w, "Failed to reset services: "+err.Error(), http.StatusInternalServerError)
+			// Reset all competition scoring data, service checks, and scores
+			if err := sql_wrapper.ResetAllScoringData(); err != nil {
+				http.Error(w, "Failed to reset scoring data: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"message": "Services reset successfully"})
+			json.NewEncoder(w).Encode(map[string]string{"message": "All scoring data reset successfully"})
 			return
 		default:
 			http.Error(w, "Invalid action", http.StatusBadRequest)
@@ -434,4 +436,75 @@ func HandleApiServiceMatrix(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// HandleApiInfo returns informational tables: service IP scheme, default passwords, and
+// environment login info for a given team (dynamic per-team content). The handler accepts
+// an optional query param `team_id` to scope env login info to a team.
+func HandleApiInfo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// optional team_id query param
+	q := r.URL.Query().Get("team_id")
+	teamID := 0
+	if q != "" {
+		if v, err := strconv.Atoi(q); err == nil {
+			teamID = v
+		}
+	}
+
+	// Fetch services for generating service-specific entries
+	services, _ := sql_wrapper.GetAllServices()
+
+	// Build placeholder service IP scheme table
+	var svcIPScheme []map[string]string
+	for _, s := range services {
+		svcIPScheme = append(svcIPScheme, map[string]string{
+			"service": s.Name,
+			"scheme":  fmt.Sprintf("10.%d.%d.x (team.%d.service.%s)", 0, s.ID, teamID, s.Name),
+		})
+	}
+	if len(svcIPScheme) == 0 {
+		// add some lorem placeholder rows
+		svcIPScheme = append(svcIPScheme, map[string]string{"service": "Service-A", "scheme": "10.TEAM.SVC.x"})
+		svcIPScheme = append(svcIPScheme, map[string]string{"service": "Service-B", "scheme": "10.TEAM.SVC.y"})
+	}
+
+	// Default passwords placeholder
+	defaultPw := []map[string]string{
+		{"account": "admin", "password": "Password123!", "notes": "Lorem ipsum"},
+		{"account": "root", "password": "toor", "notes": "Lorem ipsum"},
+	}
+
+	// Environment login info (dynamic per team)
+	var envLogins []map[string]string
+	if teamID == 0 {
+		// if no team specified, include a sample entry
+		envLogins = append(envLogins, map[string]string{"service": "Example", "url": "http://example.team.local/", "username": "team1", "password": "pass-1"})
+	} else {
+		// generate one login per service for this team
+		for _, s := range services {
+			envLogins = append(envLogins, map[string]string{
+				"service":  s.Name,
+				"url":      fmt.Sprintf("https://%s.team%d.example.com", s.Name, teamID),
+				"username": fmt.Sprintf("team%d_%s_user", teamID, s.Name),
+				"password": fmt.Sprintf("pwd-%d-%s", teamID, s.Name),
+			})
+		}
+		if len(envLogins) == 0 {
+			envLogins = append(envLogins, map[string]string{"service": "Example", "url": "http://example.team.local/", "username": fmt.Sprintf("team%d", teamID), "password": "pass-1"})
+		}
+	}
+
+	resp := map[string]interface{}{
+		"service_ip_scheme": svcIPScheme,
+		"default_passwords": defaultPw,
+		"env_logins":        envLogins,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
