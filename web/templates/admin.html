@@ -179,6 +179,72 @@
         }
     </style>
     <link rel="stylesheet" href="/static/admin.css">
+    <style>
+        /* Minimal scrollbar styling for history containers */
+        .minimal-scroll {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+        }
+
+        .minimal-scroll::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+
+        .minimal-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .minimal-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.12);
+            border-radius: 6px;
+        }
+
+        /* Fancy form controls for scoring adjustments */
+        .fancy-input,
+        .fancy-select {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            /* force these styles even if inline styles are present on elements */
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01)) !important;
+            border: 1px solid rgba(255, 255, 255, 0.06) !important;
+            color: var(--text) !important;
+            padding: 8px 12px !important;
+            border-radius: 8px !important;
+            outline: none;
+            box-shadow: none;
+            transition: box-shadow 120ms ease, border-color 120ms ease;
+        }
+
+        .fancy-input:focus,
+        .fancy-select:focus {
+            border-color: rgba(45, 212, 191, 0.6);
+            box-shadow: 0 4px 16px rgba(45, 212, 191, 0.06);
+        }
+
+        /* add a subtle dropdown arrow for fancy selects */
+        .fancy-select {
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23e6eef3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>") !important;
+            background-repeat: no-repeat !important;
+            background-position: right 10px center !important;
+            background-size: 14px 14px !important;
+            padding-right: 36px !important;
+        }
+
+        /* Attempt to style native option popup (limited support) */
+        .fancy-select option {
+            background: var(--card);
+            color: var(--text);
+        }
+
+        /* On some browsers, you can style the dropdown via select::-ms-expand (IE) or use shadow DOM -- limited */
+        select::-ms-expand {
+            display: none;
+        }
+
+        /* If you need full control of open-list styling, use a custom select component instead */
+    </style>
 </head>
 
 <body>
@@ -205,7 +271,8 @@
 
             <div class="card" style="max-width:100%;margin-top:18px">
                 <h3>Service Configuration Matrix</h3>
-                <div class="muted" style="margin-bottom:12px">Shows which services are configured for each team. Green = Configured with IP mapping, Red = Not configured</div>
+                <div class="muted" style="margin-bottom:12px">Shows which services are configured for each team. Green =
+                    Configured with IP mapping, Red = Not configured</div>
                 <div id="service-matrix-container" style="overflow-x:auto">
                     <div class="muted">Loading service matrix...</div>
                 </div>
@@ -635,37 +702,422 @@
         <section id="view-box-mapping" data-view hidden>
             <div class="page-title">
                 <h1>Box Mapping</h1>
-                <div class="muted">Assign boxes (IP addresses) to teams and services</div>
+                <div class="muted">Enter IP addresses for each Team × Service. Leave empty to remove mapping.</div>
             </div>
 
-            <div style="display:flex;gap:12px;flex-wrap:wrap">
-                <div style="flex:1;min-width:320px">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                        <strong>Scoring Boxes</strong>
-                        <button id="add-box-btn" class="btn btn-primary">+ Add Box</button>
+            <div class="card" style="overflow:auto">
+                <div id="box-matrix-controls"
+                    style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                    <strong>Team / Service Matrix</strong>
+                    <div class="muted">Click a cell to edit the IP address. Changes are saved automatically.</div>
+                </div>
+
+                <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                        <label style="display:flex;flex-direction:column;font-size:13px;color:var(--muted)">Service
+                            <select id="bulk-service"
+                                style="min-width:220px;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--text)"></select>
+                        </label>
+
+                        <label
+                            style="display:flex;flex-direction:column;flex:1;min-width:300px;font-size:13px;color:var(--muted)">Template
+                            <input id="bulk-template" placeholder="e.g. 10.0.{{ add 39 team }}.9 or 10.0.{{ team }}.5"
+                                style="width:100%;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.04);background:rgba(255,255,255,0.01);color:var(--text)">
+                        </label>
+
+                        <button id="bulk-preview" class="btn btn-ghost">Preview</button>
+                        <button id="bulk-apply" class="btn btn-primary">Apply to all teams</button>
                     </div>
-                    <div id="boxes-list"></div>
+                    <div id="bulk-preview-area" class="muted" style="font-size:13px"></div>
                 </div>
 
-                <!-- Right column removed: mappings are handled directly on boxes -->
-            </div>
-
-            <!-- Box editor (IP + Service) -->
-            <div id="box-editor" class="card" style="display:none;max-width:700px;margin-top:18px">
-                <h3 id="box-editor-title">Edit Box</h3>
-                <div style="display:flex;gap:12px;flex-wrap:wrap">
-                    <label style="flex:1 1 240px">IP address<br><input id="box-ip" style="width:100%"></label>
-                    <label style="flex:1 1 200px">Service<br><select id="box-service"
-                            style="width:100%"></select></label>
-                    <label style="flex:1 1 160px">Team<br><select id="box-team" style="width:100%"></select></label>
-                </div>
-                <div style="margin-top:12px;display:flex;gap:8px">
-                    <button id="save-box-btn" class="btn btn-primary">Save Box</button>
-                    <button id="cancel-box-btn" class="btn btn-ghost">Cancel</button>
+                <div id="box-matrix-container" style="min-width:600px;overflow:auto">
+                    <div class="muted">Loading matrix...</div>
                 </div>
             </div>
 
-            <!-- mapping-editor removed -->
+            <style>
+                /* small styles scoped to the matrix view */
+                #box-matrix-container table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+
+                #box-matrix-container th,
+                #box-matrix-container td {
+                    padding: 8px;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+                }
+
+                .matrix-team-col {
+                    position: sticky;
+                    left: 0;
+                    background: var(--card);
+                    font-weight: 600;
+                    z-index: 5;
+                }
+
+                .matrix-header-team {
+                    position: sticky;
+                    left: 0;
+                    background: var(--card);
+                    z-index: 10;
+                }
+
+                .matrix-input {
+                    width: 100%;
+                    padding: 6px 8px;
+                    border-radius: 6px;
+                    border: 1px solid rgba(255, 255, 255, 0.04);
+                    background: rgba(255, 255, 255, 0.01);
+                    color: var(--text);
+                }
+
+                .matrix-input.saving {
+                    box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.08) inset;
+                }
+
+                .matrix-input.error {
+                    box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.12) inset;
+                }
+
+                /* preview badge inside cells */
+                .matrix-preview {
+                    display: block;
+                    margin-top: 6px;
+                    font-size: 13px;
+                    color: #ffffff;
+                    background: rgba(45, 212, 191, 0.12);
+                    padding: 6px 8px;
+                    border-radius: 8px;
+                    font-weight: 600;
+                    max-width: 220px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+
+                /* selected service dropdown text color */
+                select.has-selection {
+                    color: var(--accent);
+                    font-weight: 700;
+                }
+
+                @media (max-width:900px) {
+                    #box-matrix-container {
+                        min-width: 900px;
+                    }
+                }
+            </style>
+
+            <script>
+                (function () {
+                    const container = document.getElementById('box-matrix-container');
+                    let teams = [];
+                    let services = [];
+                    // mapping indexed by teamId -> serviceId -> mapping object
+                    let boxMap = {};
+                    // helpers for debouncing saves per input
+                    const saveTimers = new Map();
+
+                    async function loadMatrix() {
+                        container.innerHTML = '<div class="muted">Loading matrix...</div>';
+                        try {
+                            const res = await fetch('/api/admin/service-matrix', { credentials: 'same-origin' });
+                            if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+                            const data = await res.json();
+                            teams = data.teams || [];
+                            services = data.services || [];
+                            boxMap = data.box_map || {};
+                            renderMatrix();
+                        } catch (err) {
+                            console.error('Failed to load matrix', err);
+                            container.innerHTML = '<div class="muted">Failed to load matrix</div>';
+                        }
+                    }
+
+                    function renderMatrix() {
+                        if (!teams.length || !services.length) {
+                            container.innerHTML = '<div class="muted">No teams or services configured.</div>';
+                            return;
+                        }
+
+                        const table = document.createElement('table');
+
+                        // header
+                        const thead = document.createElement('thead');
+                        const headerRow = document.createElement('tr');
+                        const thTeam = document.createElement('th');
+                        thTeam.className = 'matrix-header-team';
+                        thTeam.textContent = 'Team \u2014 Service';
+                        headerRow.appendChild(thTeam);
+
+                        services.forEach(svc => {
+                            const th = document.createElement('th');
+                            th.style.textAlign = 'center';
+                            th.textContent = svc.name || svc.service || ('svc-' + (svc.id || ''));
+                            headerRow.appendChild(th);
+                        });
+                        thead.appendChild(headerRow);
+                        table.appendChild(thead);
+
+                        // body
+                        const tbody = document.createElement('tbody');
+                        teams.forEach(team => {
+                            const tr = document.createElement('tr');
+                            const teamCell = document.createElement('td');
+                            teamCell.className = 'matrix-team-col';
+                            teamCell.textContent = team.name || ('team-' + team.id);
+                            tr.appendChild(teamCell);
+
+                            services.forEach(svc => {
+                                const td = document.createElement('td');
+                                td.style.textAlign = 'center';
+
+                                const existing = (boxMap[team.id] && boxMap[team.id][svc.id]) || null;
+                                const input = document.createElement('input');
+                                input.className = 'matrix-input';
+                                input.value = existing && existing.ip_address ? existing.ip_address : '';
+                                input.dataset.teamId = team.id;
+                                input.dataset.serviceId = svc.id;
+                                if (existing && existing.id) input.dataset.mappingId = existing.id;
+
+                                // save on blur or after small debounce
+                                input.addEventListener('input', () => scheduleSave(input));
+                                input.addEventListener('blur', () => doImmediateSave(input));
+
+                                td.appendChild(input);
+                                tr.appendChild(td);
+                            });
+
+                            tbody.appendChild(tr);
+                        });
+
+                        table.appendChild(tbody);
+                        container.innerHTML = '';
+                        container.appendChild(table);
+                    }
+
+                    function scheduleSave(input) {
+                        const key = input.dataset.teamId + ':' + input.dataset.serviceId;
+                        if (saveTimers.has(key)) clearTimeout(saveTimers.get(key));
+                        // quick debounce to avoid rapid requests while typing
+                        saveTimers.set(key, setTimeout(() => { saveTimers.delete(key); saveCell(input); }, 600));
+                    }
+
+                    function doImmediateSave(input) {
+                        const key = input.dataset.teamId + ':' + input.dataset.serviceId;
+                        if (saveTimers.has(key)) { clearTimeout(saveTimers.get(key)); saveTimers.delete(key); }
+                        saveCell(input);
+                    }
+
+                    async function saveCell(input) {
+                        const teamId = Number(input.dataset.teamId);
+                        const serviceId = Number(input.dataset.serviceId);
+                        const ip = (input.value || '').trim();
+                        const mappingId = input.dataset.mappingId ? Number(input.dataset.mappingId) : null;
+
+                        // visual feedback
+                        input.classList.remove('error');
+                        input.classList.add('saving');
+
+                        try {
+                            if (!ip) {
+                                // delete mapping if exists
+                                const existing = boxMap[teamId] && boxMap[teamId][serviceId];
+                                if (!existing) {
+                                    input.classList.remove('saving');
+                                    return; // nothing to do
+                                }
+
+                                // Prefer deletion by id if available
+                                if (existing.id) {
+                                    const delRes = await fetch('/api/admin/boxes', {
+                                        method: 'DELETE',
+                                        credentials: 'same-origin',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ id: existing.id })
+                                    });
+                                    if (!delRes.ok) throw new Error('Delete failed: ' + delRes.status);
+                                } else {
+                                    // fallback: attempt delete by team/service
+                                    const delRes = await fetch('/api/admin/boxes', {
+                                        method: 'DELETE',
+                                        credentials: 'same-origin',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ team_id: teamId, service_id: serviceId })
+                                    });
+                                    if (!delRes.ok) throw new Error('Delete failed: ' + delRes.status);
+                                }
+
+                                // remove from local map and clear mappingId
+                                if (boxMap[teamId]) { delete boxMap[teamId][serviceId]; }
+                                delete input.dataset.mappingId;
+                                input.classList.remove('saving');
+                                return;
+                            }
+
+                            // create/update mapping via POST
+                            const payload = { team_id: teamId, service_id: serviceId, ip_address: ip };
+                            if (mappingId) payload.id = mappingId;
+
+                            const res = await fetch('/api/admin/boxes', {
+                                method: 'POST',
+                                credentials: 'same-origin',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(payload)
+                            });
+                            if (!res.ok) throw new Error('Save failed: ' + res.status);
+
+                            // Try to read returned mapping object
+                            let saved = null;
+                            try { saved = await res.json(); } catch (e) { /* ignore */ }
+
+                            // Update local map
+                            boxMap[teamId] = boxMap[teamId] || {};
+                            if (saved && saved.id) {
+                                boxMap[teamId][serviceId] = saved;
+                                input.dataset.mappingId = saved.id;
+                            } else {
+                                // best-effort minimal mapping
+                                boxMap[teamId][serviceId] = { ip_address: ip };
+                            }
+
+                            input.classList.remove('saving');
+                        } catch (err) {
+                            console.error('Failed to save mapping', err);
+                            input.classList.remove('saving');
+                            input.classList.add('error');
+                        }
+                    }
+
+                    // Expose hook for router when view becomes visible
+                    window.onBoxMappingVisible = async function () { await loadMatrix(); populateBulkService(); };
+
+                    // Load immediately if visible
+                    const section = document.getElementById('view-box-mapping');
+                    if (section && !section.hasAttribute('hidden')) (async () => { await loadMatrix(); populateBulkService(); })();
+
+                    // Bulk controls
+                    const bulkServiceSel = document.getElementById('bulk-service');
+                    const bulkTemplateInput = document.getElementById('bulk-template');
+                    const bulkPreviewBtn = document.getElementById('bulk-preview');
+                    const bulkApplyBtn = document.getElementById('bulk-apply');
+                    const bulkPreviewArea = document.getElementById('bulk-preview-area');
+
+                    function populateBulkService() {
+                        if (!bulkServiceSel) return;
+                        bulkServiceSel.innerHTML = '';
+                        services.forEach(s => {
+                            const opt = document.createElement('option');
+                            opt.value = s.id;
+                            opt.textContent = s.name || s.service || ('svc-' + s.id);
+                            bulkServiceSel.appendChild(opt);
+                        });
+                        // mark selection styling
+                        if (bulkServiceSel.value) bulkServiceSel.classList.add('has-selection'); else bulkServiceSel.classList.remove('has-selection');
+                    }
+
+                    // Simple evaluator supporting patterns like {{ add 39 team }} and {{ team }}
+                    function evalTemplateForTeam(tmpl, teamId) {
+                        if (!tmpl || tmpl.indexOf('{{') === -1) return tmpl;
+                        // handle occurrences of {{ ... }}
+                        return tmpl.replace(/{{\s*([^}]+)\s*}}/g, (_, expr) => {
+                            try {
+                                // tokenize by whitespace
+                                const parts = expr.trim().split(/\s+/);
+                                if (parts.length === 1) {
+                                    // single token like 'team' or a number
+                                    if (parts[0] === 'team') return String(teamId);
+                                    const n = Number(parts[0]); return isNaN(n) ? parts[0] : String(n);
+                                }
+                                // function form: op a b ... (we only support add, sub, mul, div)
+                                const op = parts[0];
+                                const args = parts.slice(1).map(p => p === 'team' ? Number(teamId) : Number(p));
+                                if (args.some(a => typeof a !== 'number' || isNaN(a))) return '{{' + expr + '}}';
+                                switch (op) {
+                                    case 'add': return String(args.reduce((a, b) => a + b, 0));
+                                    case 'sub': return String(args.slice(1).reduce((a, b) => a - b, args[0]));
+                                    case 'mul':
+                                    case 'multiply':
+                                    case 'times': return String(args.reduce((a, b) => a * b, 1));
+                                    case 'div': return String(args.slice(1).reduce((a, b) => a / b, args[0]));
+                                    default: return '{{' + expr + '}}';
+                                }
+                            } catch (e) {
+                                return '{{' + expr + '}}';
+                            }
+                        });
+                    }
+
+                    bulkPreviewBtn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const svcId = Number(bulkServiceSel.value || 0);
+                        const tmpl = (bulkTemplateInput.value || '').trim();
+                        if (!svcId || !tmpl) { bulkPreviewArea.textContent = 'Choose a service and enter a template.'; return; }
+                        // render preview badges into each table cell for the selected service
+                        teams.forEach(t => {
+                            const preview = evalTemplateForTeam(tmpl, t.id);
+                            const inputEl = document.querySelector(`input.matrix-input[data-team-id="${t.id}"][data-service-id="${svcId}"]`);
+                            if (inputEl && inputEl.parentElement) {
+                                let badge = inputEl.parentElement.querySelector('.matrix-preview');
+                                if (!badge) { badge = document.createElement('span'); badge.className = 'matrix-preview'; inputEl.parentElement.appendChild(badge); }
+                                badge.textContent = preview;
+                            }
+                        });
+                        bulkPreviewArea.textContent = 'Preview applied to table (colored badges).';
+                        // mark select as styled
+                        bulkServiceSel.classList.add('has-selection');
+                    });
+
+                    // style the select when changed
+                    if (bulkServiceSel) {
+                        bulkServiceSel.addEventListener('change', () => {
+                            if (bulkServiceSel.value) bulkServiceSel.classList.add('has-selection'); else bulkServiceSel.classList.remove('has-selection');
+                        });
+                    }
+
+                    bulkApplyBtn.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        const svcId = Number(bulkServiceSel.value || 0);
+                        const tmpl = (bulkTemplateInput.value || '').trim();
+                        if (!svcId || !tmpl) { alert('Choose a service and enter a template.'); return; }
+
+                        if (!confirm('Apply this template to all teams for the selected service? This will create/update IPs for each team.')) return;
+
+                        // For each team, compute IP and save via POST (or DELETE if blank)
+                        for (const t of teams) {
+                            const ip = evalTemplateForTeam(tmpl, t.id).trim();
+                            // find existing mapping in boxMap
+                            const existing = (boxMap[t.id] && boxMap[t.id][svcId]) || null;
+                            const inputEl = document.querySelector(`input.matrix-input[data-team-id="${t.id}"][data-service-id="${svcId}"]`);
+                            if (inputEl) {
+                                inputEl.value = ip;
+                                // trigger a save (immediate)
+                                try { await saveCell(inputEl); } catch (e) { console.error('bulk save failed for team', t.id, e); }
+                            } else {
+                                // no direct input found, perform POST directly
+                                try {
+                                    if (!ip) {
+                                        if (existing && existing.id) {
+                                            await fetch('/api/admin/boxes', { method: 'DELETE', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: existing.id }) });
+                                        }
+                                        continue;
+                                    }
+                                    const payload = { team_id: t.id, service_id: svcId, ip_address: ip };
+                                    if (existing && existing.id) payload.id = existing.id;
+                                    await fetch('/api/admin/boxes', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                                } catch (err) { console.error('bulk direct save failed', err); }
+                            }
+                        }
+
+                        // Refresh matrix after apply
+                        await loadMatrix();
+                        populateBulkService();
+                        alert('Bulk apply complete.');
+                    });
+                })();
+            </script>
         </section>
 
         <section id="view-scores" data-view hidden>
@@ -673,14 +1125,139 @@
                 <h1>Scores</h1>
                 <div class="muted">View and edit scores</div>
             </div>
-            <div class="grid">
-                <div class="card"><strong>Leaderboard</strong>
-                    <div class="muted">Top participants</div>
+            <div class="card" style="max-width:1000px">
+                <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <label style="font-size:13px;color:var(--muted)">Team
+                            <select id="scores-team"
+                                style="margin-left:8px;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--text)"></select>
+                        </label>
+                        <label style="font-size:13px;color:var(--muted)">Service
+                            <select id="scores-service"
+                                style="margin-left:8px;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--text)"></select>
+                        </label>
+                        <button id="scores-refresh" class="btn btn-ghost">Refresh</button>
+                    </div>
+                    <div class="muted">Select a team and service to view check history and outputs</div>
                 </div>
-                <div class="card"><strong>Pending adjustments</strong>
-                    <div class="muted">0</div>
+
+                <div id="scores-history" class="minimal-scroll"
+                    style="max-height:360px;overflow:auto;border-top:1px solid rgba(255,255,255,0.04);padding-top:12px">
+                    <div class="muted">No history loaded</div>
+                </div>
+
+                <hr style="margin:12px 0;border-color:rgba(255,255,255,0.04)">
+
+                <div style="margin-top:8px">
+                    <h3>Add Scoring Adjustment</h3>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                        <label style="flex:1;min-width:200px">Team<br><select id="adj-team" class="fancy-select"
+                                style="width:100%"></select></label>
+                        <label style="width:140px">Points<br><input id="adj-points" class="fancy-input" type="number"
+                                value="0" style="width:100%"></label>
+                        <label style="width:140px">Round (optional)<br><input id="adj-round" class="fancy-input"
+                                type="number" style="width:100%"></label>
+                        <label style="flex:2;min-width:220px">Reason<br><input id="adj-desc" class="fancy-input"
+                                style="width:100%"></label>
+                        <div>
+                            <button id="adj-submit" class="btn btn-primary">Add Adjustment</button>
+                        </div>
+                    </div>
                 </div>
             </div>
+            <script>
+                (function () {
+                    const teamSel = document.getElementById('scores-team');
+                    const svcSel = document.getElementById('scores-service');
+                    const historyDiv = document.getElementById('scores-history');
+                    const refreshBtn = document.getElementById('scores-refresh');
+
+                    const adjTeam = document.getElementById('adj-team');
+                    const adjPoints = document.getElementById('adj-points');
+                    const adjRound = document.getElementById('adj-round');
+                    const adjDesc = document.getElementById('adj-desc');
+                    const adjSubmit = document.getElementById('adj-submit');
+
+                    let teams = [];
+                    let services = [];
+
+                    async function loadSelectors() {
+                        const [tRes, sRes] = await Promise.all([
+                            fetch('/api/admin/teams', { credentials: 'same-origin' }),
+                            fetch('/api/admin/services', { credentials: 'same-origin' })
+                        ]);
+                        teams = await tRes.json();
+                        services = await sRes.json();
+                        teamSel.innerHTML = '';
+                        adjTeam.innerHTML = '';
+                        teams.forEach(t => { teamSel.appendChild(new Option(t.name, t.id)); adjTeam.appendChild(new Option(t.name, t.id)); });
+                        svcSel.innerHTML = '';
+                        services.forEach(s => svcSel.appendChild(new Option(s.name || s.service || s.name, s.id)));
+                    }
+
+                    async function loadHistory() {
+                        const teamId = Number(teamSel.value || 0);
+                        const svcId = Number(svcSel.value || 0);
+                        if (!teamId || !svcId) { historyDiv.innerHTML = '<div class="muted">Select team and service to view history</div>'; return; }
+                        historyDiv.innerHTML = '<div class="muted">Loading history...</div>';
+                        try {
+                            const res = await fetch(`/api/admin/score-history?team_id=${teamId}&service_id=${svcId}`, { credentials: 'same-origin' });
+                            if (!res.ok) throw new Error(res.statusText);
+                            const rows = await res.json();
+                            renderHistory(rows);
+                        } catch (err) { console.error(err); historyDiv.innerHTML = '<div class="muted">Failed to load history</div>'; }
+                    }
+
+                    function renderHistory(rows) {
+                        if (!rows || rows.length === 0) { historyDiv.innerHTML = '<div class="muted">No history for this selection</div>'; return; }
+                        const table = document.createElement('table');
+                        table.style.width = '100%';
+                        table.style.borderCollapse = 'collapse';
+                        const thead = document.createElement('thead');
+                        const hr = document.createElement('tr');
+                        ['Round', 'Status', 'Output'].forEach(t => { const th = document.createElement('th'); th.textContent = t; th.style.textAlign = 'left'; th.style.padding = '8px'; th.style.borderBottom = '1px solid rgba(255,255,255,0.06)'; hr.appendChild(th); });
+                        thead.appendChild(hr);
+                        table.appendChild(thead);
+                        const tbody = document.createElement('tbody');
+                        // show most recent entries at the top
+                        const ordered = Array.isArray(rows) ? rows.slice().reverse() : rows;
+                        ordered.forEach(r => {
+                            const tr = document.createElement('tr');
+                            const roundTd = document.createElement('td'); roundTd.textContent = r.round; roundTd.style.padding = '8px'; tr.appendChild(roundTd);
+                            const statusTd = document.createElement('td'); statusTd.style.padding = '8px';
+                            const img = document.createElement('img'); img.width = 20; img.height = 20; img.alt = r.is_up ? 'UP' : 'DOWN'; img.src = r.is_up ? '/static/up.png' : '/static/down.png'; statusTd.appendChild(img); tr.appendChild(statusTd);
+                            const outTd = document.createElement('td'); outTd.style.padding = '8px'; const pre = document.createElement('pre'); pre.textContent = r.output || ''; pre.style.whiteSpace = 'pre-wrap'; pre.style.margin = '0'; outTd.appendChild(pre); tr.appendChild(outTd);
+                            tbody.appendChild(tr);
+                        });
+                        table.appendChild(tbody);
+                        historyDiv.innerHTML = '';
+                        historyDiv.appendChild(table);
+                    }
+
+                    refreshBtn.addEventListener('click', loadHistory);
+                    teamSel.addEventListener('change', loadHistory);
+                    svcSel.addEventListener('change', loadHistory);
+
+                    adjSubmit.addEventListener('click', async () => {
+                        const teamId = Number(adjTeam.value || 0);
+                        const pts = Number(adjPoints.value || 0);
+                        const rnd = Number(adjRound.value || 0);
+                        const desc = (adjDesc.value || '').trim();
+                        if (!teamId) return alert('Choose a team');
+                        try {
+                            const res = await fetch('/api/admin/score-adjust', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ team_id: teamId, score: pts, round: rnd || null, description: desc }) });
+                            if (!res.ok) throw new Error('Failed');
+                            alert('Adjustment added');
+                            // clear inputs
+                            adjPoints.value = '0'; adjRound.value = ''; adjDesc.value = '';
+                            loadHistory();
+                        } catch (err) { console.error(err); alert('Failed to add adjustment'); }
+                    });
+
+                    // init
+                    (async () => { await loadSelectors(); })();
+                })();
+            </script>
         </section>
 
         <section id="view-competitions" data-view hidden>
@@ -688,7 +1265,7 @@
                 <h1>Competition</h1>
                 <div class="muted">Schedule, start, stop and reset competition</div>
             </div>
-            
+
             <div class="card" style="max-width:800px">
                 <h3>Competition Status</h3>
                 <div id="comp-status" style="margin:12px 0">
@@ -707,14 +1284,15 @@
                 <hr style="margin:18px 0;border-color:rgba(255,255,255,0.04)">
 
                 <h3>Actions</h3>
-                
+
                 <div style="margin-bottom:18px">
                     <label style="display:block;margin-bottom:6px"><strong>Schedule Competition</strong></label>
                     <div style="display:flex;gap:8px;align-items:center">
                         <input type="datetime-local" id="scheduled-time-input" style="flex:1;max-width:300px">
                         <button id="schedule-btn" class="btn btn-primary">Schedule</button>
                     </div>
-                    <div class="muted" style="margin-top:4px">Set a future date and time for the competition to start</div>
+                    <div class="muted" style="margin-top:4px">Set a future date and time for the competition to start
+                    </div>
                 </div>
 
                 <div style="display:flex;gap:8px;margin-bottom:18px">
@@ -727,7 +1305,8 @@
                 <h3 style="color:#f97316">Danger Zone</h3>
                 <div style="margin-top:12px">
                     <button id="reset-btn" class="btn btn-danger">Reset Scoring Data</button>
-                    <div class="muted" style="margin-top:6px">This will delete all records from the competition_scores table. This action cannot be undone.</div>
+                    <div class="muted" style="margin-top:6px">This will delete all records from the competition_scores
+                        table. This action cannot be undone.</div>
                 </div>
             </div>
         </section>
@@ -739,7 +1318,8 @@
             </div>
             <div class="card" style="max-width:1000px">
                 <h3>User List</h3>
-                <div class="muted" style="margin-bottom:12px">Users are automatically provisioned when they sign in. Assign them to teams below.</div>
+                <div class="muted" style="margin-bottom:12px">Users are automatically provisioned when they sign in.
+                    Assign them to teams below.</div>
                 <div id="users-list-container" style="margin-top:12px">
                     <div class="muted">Loading users...</div>
                 </div>
@@ -751,7 +1331,7 @@
                 <h1>Teams</h1>
                 <div class="muted">Manage teams</div>
             </div>
-            
+
             <div class="card" style="max-width:800px;margin-bottom:18px">
                 <h3>Create New Team</h3>
                 <div style="display:flex;gap:8px;align-items:flex-end;margin-top:12px">
@@ -894,6 +1474,44 @@
             // On load, activate based on location.pathname (ensure default is /admin/)
             const initial = location.pathname && location.pathname.startsWith(BASE) ? location.pathname : BASE + '/';
             setActivePath(initial, true);
+        })();
+    </script>
+    <script>
+        (function () {
+            // Apply fancy-select class to existing and future <select> elements inside the admin UI.
+            function styleSelect(el) {
+                if (!(el instanceof HTMLSelectElement)) return;
+                // add the class if not present
+                if (!el.classList.contains('fancy-select')) el.classList.add('fancy-select');
+                // ensure the element isn't visually broken by inline backgrounds
+                el.style.background = el.style.background || 'transparent';
+                // toggle .has-selection when value is set
+                function updateHasSelection() {
+                    try {
+                        if (el.value && String(el.value) !== '0' && el.value !== '') el.classList.add('has-selection');
+                        else el.classList.remove('has-selection');
+                    } catch (e) { }
+                }
+                el.addEventListener('change', updateHasSelection);
+                updateHasSelection();
+            }
+
+            // initialize existing selects
+            document.querySelectorAll('select').forEach(styleSelect);
+
+            // Observe for future added selects (some parts of the admin UI create selects dynamically)
+            const observer = new MutationObserver(muts => {
+                for (const m of muts) {
+                    for (const n of m.addedNodes) {
+                        if (!(n instanceof Element)) continue;
+                        if (n.tagName === 'SELECT') styleSelect(n);
+                        // also find nested selects
+                        n.querySelectorAll && n.querySelectorAll('select').forEach(styleSelect);
+                    }
+                }
+            });
+
+            observer.observe(document.body, { childList: true, subtree: true });
         })();
     </script>
     <script>
@@ -1144,13 +1762,13 @@
             // Create team handler
             const createTeamBtn = document.getElementById('create-team-btn');
             const newTeamNameInput = document.getElementById('new-team-name');
-            
+
             if (createTeamBtn) {
                 createTeamBtn.addEventListener('click', async (e) => {
                     e.preventDefault();
                     const name = newTeamNameInput.value.trim();
                     if (!name) return alert('Enter team name');
-                    
+
                     try {
                         const res = await fetch('/api/admin/teams', {
                             method: 'POST',
@@ -1388,7 +2006,7 @@
                 // Header row with service names
                 const thead = document.createElement('thead');
                 const headerRow = document.createElement('tr');
-                
+
                 // First column is team name
                 const teamHeader = document.createElement('th');
                 teamHeader.textContent = 'Team / Service';
@@ -1518,7 +2136,7 @@
                 // Update status with color coding
                 const status = currentCompetition.status || 'stopped';
                 statusText.textContent = status.charAt(0).toUpperCase() + status.slice(1);
-                
+
                 if (status === 'running') {
                     statusText.style.color = '#10b981';
                 } else if (status === 'scheduled') {

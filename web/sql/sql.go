@@ -4,6 +4,8 @@ package sql_wrapper
 
 import (
 	"database/sql"
+	"fmt"
+	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
@@ -808,6 +810,76 @@ func GetTeamServiceUptimePercents() (map[int]map[int]float64, error) {
 		}
 	}
 	return m, nil
+}
+
+// Competition service history record returned to UI
+type CompetitionServiceRecord struct {
+	TeamID    int    `json:"team_id"`
+	ServiceID int    `json:"service_id"`
+	IsUp      bool   `json:"is_up"`
+	Output    string `json:"output"`
+	Round     int    `json:"round"`
+	Timestamp string `json:"timestamp"`
+}
+
+// GetCompetitionServiceHistory returns competition_services rows for a given team/service
+// If teamID or serviceID is 0, that filter is ignored.
+func GetCompetitionServiceHistory(teamID, serviceID int) ([]CompetitionServiceRecord, error) {
+	q := `SELECT team_id, service_id, is_up, output, round, timestamp FROM competition_services`
+	var args []interface{}
+	var where []string
+	if teamID != 0 {
+		where = append(where, "team_id = ?")
+		args = append(args, teamID)
+	}
+	if serviceID != 0 {
+		where = append(where, "service_id = ?")
+		args = append(args, serviceID)
+	}
+	if len(where) > 0 {
+		q = q + " WHERE " + strings.Join(where, " AND ")
+	}
+	q = q + " ORDER BY round ASC, timestamp ASC"
+
+	rows, err := db.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []CompetitionServiceRecord
+	for rows.Next() {
+		var r CompetitionServiceRecord
+		var isUp bool
+		if err := rows.Scan(&r.TeamID, &r.ServiceID, &isUp, &r.Output, &r.Round, &r.Timestamp); err != nil {
+			return nil, err
+		}
+		r.IsUp = isUp
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+// AddCompetitionScoreAdjustment inserts an adjustment into competition_scores
+func AddCompetitionScoreAdjustment(teamID int, score int, round int, description string) (int, error) {
+	if teamID == 0 {
+		return 0, fmt.Errorf("team_id required")
+	}
+	var res sql.Result
+	var err error
+	if round > 0 {
+		res, err = db.Exec("INSERT INTO competition_scores (team_id, score, round, description) VALUES (?, ?, ?, ?)", teamID, score, round, description)
+	} else {
+		res, err = db.Exec("INSERT INTO competition_scores (team_id, score, description) VALUES (?, ?, ?)", teamID, score, description)
+	}
+	if err != nil {
+		return 0, err
+	}
+	last, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	return int(last), nil
 }
 
 // GetUserTeamBySubject returns the team (if any) that the user identified by the

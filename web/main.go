@@ -164,6 +164,9 @@ func main() {
 	http.Handle("/api/admin/competition", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiCompetition))))
 	http.Handle("/api/admin/service-matrix", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiServiceMatrix))))
 
+	http.Handle("/api/admin/score-history", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiScoreHistory))))
+	http.Handle("/api/admin/score-adjust", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiScoreAdjust))))
+
 	http.Handle("/api/admin/team-members", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleTeamMembers))))
 
 	// Serve static files (e.g., CSS, JS)

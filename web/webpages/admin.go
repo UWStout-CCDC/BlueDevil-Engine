@@ -387,6 +387,61 @@ func HandleApiCompetition(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Score history for team/service
+func HandleApiScoreHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	qTeam := r.URL.Query().Get("team_id")
+	qSvc := r.URL.Query().Get("service_id")
+	teamID := 0
+	svcID := 0
+	if qTeam != "" {
+		if v, err := strconv.Atoi(qTeam); err == nil {
+			teamID = v
+		}
+	}
+	if qSvc != "" {
+		if v, err := strconv.Atoi(qSvc); err == nil {
+			svcID = v
+		}
+	}
+
+	rows, err := sql_wrapper.GetCompetitionServiceHistory(teamID, svcID)
+	if err != nil {
+		http.Error(w, "Failed to get history: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(rows)
+}
+
+// Add score adjustment
+func HandleApiScoreAdjust(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		TeamID      int    `json:"team_id"`
+		Score       int    `json:"score"`
+		Round       int    `json:"round"`
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	id, err := sql_wrapper.AddCompetitionScoreAdjustment(req.TeamID, req.Score, req.Round, req.Description)
+	if err != nil {
+		http.Error(w, "Failed to add adjustment: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]int{"id": id})
+}
+
 // Service Matrix API - returns data for the dashboard service configuration matrix
 func HandleApiServiceMatrix(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
