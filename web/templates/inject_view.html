@@ -57,79 +57,42 @@
             font-size: 14px
         }
 
-        <main>
-            <div class="card" style="padding:12px;">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-                    <div style="display:flex;gap:12px;align-items:flex-start">
-                        <!-- logo -->
-                        {{/* show logo if available */}}
-                        {{if (index . "LogoPath") }}
-                            <img src="/static/logo.png" alt="logo" style="width:68px;height:auto;margin-top:6px" />
-                        {{else}}
-                            <div style="width:68px"></div>
-                        {{end}}
-                        <div>
-                            <h1 style="margin:0;font-size:28px">{{.Inject.InjectID}} — {{.Inject.Title}}</h1>
-                            <div style="height:8px"></div>
-                            <div style="display:flex;gap:12px;align-items:center">
-                                {{if .Inject.Filename}}
-                                    <a class="btn" href="/injects/{{.Inject.Filename}}" target="_blank">Download Inject PDF</a>
-                                {{else}}
-                                    <div class="muted">No PDF available for this inject</div>
-                                {{end}}
-                                <div class="muted">{{if .Inject.DueTime}}Due: {{.Inject.DueTime}}{{end}}</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div>
-                        <a class="btn btn-ghost" href="/injects">← Back to Injects</a>
-                    </div>
-                </div>
-            </div>
+        nav a.active {
+            background: linear-gradient(90deg, rgba(45, 212, 191, 0.12), rgba(99, 102, 241, 0.06));
+            color: var(--accent)
+        }
 
-            <div class="card" style="padding:12px;margin-top:8px">
-                <!-- info table moved down and styled like PDF -->
-                <table style="width:100%;border-collapse:collapse;font-size:13px">
-                    <tr>
-                        <td style="width:18%;font-weight:700;background:#f1f7fb;color:#000;padding:8px;border:1px solid #d0d7db;text-transform:uppercase">INJECT NAME</td>
-                        <td style="padding:8px;border:1px solid #d0d7db">{{.Inject.Title}}</td>
-                    </tr>
-                    <tr>
-                        <td style="font-weight:700;background:#f1f7fb;color:#000;padding:8px;border:1px solid #d0d7db;text-transform:uppercase">INJECT ID</td>
-                        <td style="padding:8px;border:1px solid #d0d7db">{{.Inject.InjectID}}</td>
-                    </tr>
-                </table>
-            </div>
+        .spacer {
+            flex: 1
+        }
 
-            <div class="card" style="padding:12px;margin-top:8px">
-                <h2 style="margin-top:4px">INJECT DESCRIPTION:</h2>
+        .auth a {
+            color: var(--text);
+            text-decoration: none;
+            font-weight: 600
+        }
+
+        main {
+            padding: 28px;
+            max-width: 1200px;
+            margin: 18px auto
+        }
+
+        .card {
             background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01));
-                <div class="inject-body" style="font-size:13px;line-height:1.45;margin-top:6px">{{.Inject.Description}}</div>
-            </div>
+            border: 1px solid var(--border);
+            padding: 16px;
+            border-radius: 10px;
+            margin-bottom: 14px
+        }
 
-            <div class="card" style="padding:12px;margin-top:8px">
-                <h2 style="margin-top:4px">INJECT DELIVERABLE</h2>
-                <div class="inject-body" style="font-size:13px;line-height:1.45;margin-top:6px">{{if .Inject.Deliverable}}{{.Inject.Deliverable}}{{else}}No deliverable specified{{end}}</div>
-            </div>
+        .muted {
+            color: var(--muted)
+        }
 
-            <div class="card" style="padding:12px;margin-top:8px">
-                <h2>Submit Your PDF</h2>
-                {{if .IsLoggedIn}}
-                <form id="submit-form" enctype="multipart/form-data" method="post" action="/api/submit-inject">
-                    <input type="hidden" name="inject_id" value="{{.Inject.InjectID}}">
-                    <label>File (PDF): <input type="file" name="file" accept="application/pdf"></label>
-                    <div style="height:8px"></div>
-                    <button class="btn">Submit</button>
-                    <div class="muted small" style="margin-top:8px">After submission an admin may review and score your submission.</div>
-                </form>
-                {{else}}
-                <div class="muted">You must <a href="/login-user">login</a> to submit.</div>
-                {{end}}
-            </div>
-        </main>
-    </body>
-
-    </html>
+        .btn {
+            padding: 8px 12px;
+            border-radius: 6px;
             background: #2dd4bf;
             color: #012;
             font-weight: 700;
