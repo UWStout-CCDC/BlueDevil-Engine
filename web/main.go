@@ -146,6 +146,9 @@ func main() {
 	// Use AuthPromptMiddleware so unauthenticated users see a friendly login prompt
 	http.Handle("/info", AuthPromptMiddleware(http.HandlerFunc(webpages.HandleInfoPage)))
 
+	// User-facing inject submission page (must be logged in)
+	http.Handle("/injects/submit", AuthMiddleware(http.HandlerFunc(webpages.HandleUserInjectPage)))
+
 	// Admin routes
 	http.Handle("/admin/", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleAdminDashboard))))
 	http.Handle("/admin/users", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleManageUsers))))
@@ -168,6 +171,23 @@ func main() {
 	http.Handle("/api/admin/score-adjust", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiScoreAdjust))))
 
 	http.Handle("/api/admin/team-members", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleTeamMembers))))
+
+	// Inject APIs
+	http.Handle("/api/admin/injects", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiInjects))))
+	http.Handle("/api/admin/injects/upload", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiInjectUpload))))
+
+	// Admin: list submissions
+	http.Handle("/api/admin/injects/submissions", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiInjectSubmissions))))
+
+	// Admin generate PDF and score endpoints
+	http.Handle("/api/admin/injects/generate", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiInjectGenerate))))
+	http.Handle("/api/admin/injects/score", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiInjectScore))))
+
+	// Serve injects pages and PDF files via our handler
+	http.Handle("/injects/", AuthPromptMiddleware(http.HandlerFunc(webpages.HandleInjectsRoot)))
+	http.Handle("/submissions/", http.StripPrefix("/submissions/", http.FileServer(http.Dir("submissions"))))
+	// User submission endpoint (authenticated users)
+	http.Handle("/injects/submit-inject", AuthPromptMiddleware(http.HandlerFunc(webpages.HandleApiSubmitInject)))
 
 	// Serve static files (e.g., CSS, JS)
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))

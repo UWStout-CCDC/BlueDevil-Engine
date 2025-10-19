@@ -1366,9 +1366,43 @@
                 <h1>Injects</h1>
                 <div class="muted">Manage injects</div>
             </div>
+
+            <div class="card" style="margin-bottom:12px">
+                <h3>Create / Generate Inject</h3>
+                <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
+                    <label style="flex:1;min-width:220px">Inject ID (short)<br><input id="inj-id"
+                            placeholder="e.g. DSGN04T" style="width:100%"></label>
+                    <label style="flex:2;min-width:300px">Title<br><input id="inj-title" style="width:100%"></label>
+                </div>
+                <div>
+                    <label style="flex:3;min-width:360px">Description<br><textarea id="inj-desc" rows="3"
+                            style="width:100%"></textarea></label>
+                    <label style="flex:3;min-width:360px">Deliverable (appears in PDF)<br><textarea id="inj-deliverable"
+                            rows="3" style="width:100%"></textarea></label>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+                    <label>Release time<br><input id="inj-release" type="datetime-local" style="width:220px"></label>
+                    <label>Due time<br><input id="inj-due" type="datetime-local" style="width:220px"></label>
+                    <button id="inj-create" class="btn btn-primary">Create Inject</button>
+                    <label style="margin-left:8px">Upload PDF<br><input id="inj-file" type="file"
+                            accept="application/pdf"></label>
+                    <button id="inj-upload" class="btn btn-primary">Clear Upload</button>
+                </div>
+                <div id="inj-create-msg" class="muted" style="margin-top:8px"></div>
+            </div>
+
+            <div class="card" style="margin-bottom:12px">
+                <h3>Existing Injects</h3>
+                <div id="injects-list" class="muted">Loading injects...</div>
+            </div>
+
             <div class="card">
-                <strong>Inject list</strong>
-                <div class="muted">(placeholder for inject management)</div>
+                <h3>Submissions</h3>
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+                    <label style="flex:1">Select Inject<br><select id="subs-inject" style="width:100%"></select></label>
+                    <button id="subs-refresh" class="btn btn-ghost">Refresh</button>
+                </div>
+                <div id="subs-list" class="muted">Select an inject to view submissions</div>
             </div>
         </section>
     </main>
@@ -1474,6 +1508,157 @@
             // On load, activate based on location.pathname (ensure default is /admin/)
             const initial = location.pathname && location.pathname.startsWith(BASE) ? location.pathname : BASE + '/';
             setActivePath(initial, true);
+        })();
+    </script>
+    <script>
+        // Admin Injects UI
+        (function () {
+            const listDiv = document.getElementById('injects-list');
+            const createBtn = document.getElementById('inj-create');
+            const uploadBtn = document.getElementById('inj-upload');
+            const fileInput = document.getElementById('inj-file');
+            const msgDiv = document.getElementById('inj-create-msg');
+            const subsInject = document.getElementById('subs-inject');
+            const subsList = document.getElementById('subs-list');
+            const subsRefresh = document.getElementById('subs-refresh');
+
+            async function loadInjects() {
+                listDiv.textContent = 'Loading injects...';
+                try {
+                    const res = await fetch('/api/admin/injects', { credentials: 'same-origin' });
+                    if (!res.ok) throw new Error(res.statusText);
+                    const injects = await res.json();
+                    renderInjects(injects || []);
+                } catch (e) { listDiv.textContent = 'Failed to load injects'; console.error(e); }
+            }
+
+            function renderInjects(arr) {
+                listDiv.innerHTML = '';
+                subsInject.innerHTML = '';
+                if (!arr || arr.length === 0) { listDiv.innerHTML = '<div class="muted">No injects</div>'; subsInject.appendChild(new Option('-- none --', '')); return; }
+                arr.forEach(i => {
+                    const row = document.createElement('div');
+                    row.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
+                    row.style.padding = '8px';
+                    const title = document.createElement('strong');
+                    title.textContent = `${i.inject_id} — ${i.title}`;
+                    const meta = document.createElement('div');
+                    meta.className = 'muted';
+                    meta.style.marginTop = '6px';
+                    meta.textContent = `${i.description || ''} ${i.release_time ? ' | release: ' + i.release_time : ''} ${i.due_time ? ' | due: ' + i.due_time : ''}`;
+                    const actions = document.createElement('div');
+                    actions.style.display = 'flex'; actions.style.gap = '8px'; actions.style.marginTop = '8px';
+                    const dl = document.createElement('a'); dl.href = '/injects/' + (i.filename || ''); dl.textContent = 'Download'; dl.className = 'btn btn-ghost';
+                    const subsBtn = document.createElement('button'); subsBtn.className = 'btn btn-ghost'; subsBtn.textContent = 'Submissions'; subsBtn.addEventListener('click', async () => { subsInject.value = i.inject_id; await loadSubmissions(); });
+                    const delBtn = document.createElement('button'); delBtn.className = 'btn btn-danger'; delBtn.textContent = 'Delete'; delBtn.addEventListener('click', async () => {
+                        if (!confirm('Delete inject ' + i.inject_id + ' ? This will remove submissions and the PDF.')) return;
+                        try {
+                            const dres = await fetch('/api/admin/injects', { method: 'DELETE', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inject_id: i.inject_id }) });
+                            if (!dres.ok) throw new Error(dres.statusText);
+                            await loadInjects();
+                        } catch (de) { alert('Failed to delete'); console.error(de); }
+                    });
+                    actions.appendChild(dl); actions.appendChild(subsBtn); actions.appendChild(delBtn);
+                    row.appendChild(title); row.appendChild(meta); row.appendChild(actions);
+                    listDiv.appendChild(row);
+
+                    // add to select
+                    const opt = new Option(i.inject_id + ' — ' + i.title, i.inject_id);
+                    subsInject.appendChild(opt);
+                });
+            }
+
+            createBtn.addEventListener('click', async () => {
+                const injId = document.getElementById('inj-id').value.trim();
+                const title = document.getElementById('inj-title').value.trim();
+                const desc = document.getElementById('inj-desc').value.trim();
+                const release = document.getElementById('inj-release').value;
+                const due = document.getElementById('inj-due').value;
+                if (!injId || !title) return alert('inject id and title required');
+                try {
+                    const res = await fetch('/api/admin/injects', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inject_id: injId, title, description: desc, release_time: release || null, due_time: due || null }) });
+                    if (!res.ok) throw new Error(res.statusText);
+                    msgDiv.textContent = 'Inject created';
+                    // If a file is selected, upload it; otherwise generate PDF from description + deliverable
+                    const fileSel = document.getElementById('inj-file');
+                    const deliverable = document.getElementById('inj-deliverable').value.trim();
+                    if (fileSel && fileSel.files && fileSel.files.length > 0) {
+                        // upload the chosen file
+                        const f = fileSel.files[0];
+                        const fd = new FormData(); fd.append('inject_id', injId); fd.append('file', f);
+                        try {
+                            const up = await fetch('/api/admin/injects/upload', { method: 'POST', credentials: 'same-origin', body: fd });
+                            if (!up.ok) throw new Error(up.statusText);
+                            const data = await up.json();
+                            msgDiv.textContent = 'Uploaded: ' + data.filename;
+                        } catch (ue) { msgDiv.textContent = 'Upload failed'; console.error(ue); }
+                    } else {
+                        // generate from contents
+                        try {
+                            const gen = await fetch('/api/admin/injects/generate', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inject_id: injId, title, description: desc, deliverable }) });
+                            if (!gen.ok) throw new Error(gen.statusText);
+                            const data = await gen.json();
+                            msgDiv.textContent = 'PDF generated: ' + data.filename;
+                            // open preview
+                            window.open('/injects/' + encodeURIComponent(data.filename), '_blank');
+                        } catch (ge) { msgDiv.textContent = 'Failed to generate PDF'; console.error(ge); }
+                    }
+                    await loadInjects();
+                } catch (e) { msgDiv.textContent = 'Failed to create'; console.error(e); }
+            });
+
+            // generation removed; create flow handles generation/upload as appropriate
+
+            uploadBtn.addEventListener('click', async () => {
+                // Clear the selected file from the file input
+                if (fileInput) {
+                    fileInput.value = null;
+                    msgDiv.textContent = 'File selection cleared';
+                }
+            });
+
+            async function loadSubmissions() {
+                const inj = subsInject.value;
+                if (!inj) { subsList.innerHTML = '<div class="muted">Choose an inject</div>'; return; }
+                subsList.innerHTML = 'Loading submissions...';
+                try {
+                    const res = await fetch('/api/admin/injects/submissions?inject_id=' + encodeURIComponent(inj), { credentials: 'same-origin' });
+                    if (!res.ok) throw new Error(res.statusText);
+                    const subs = await res.json();
+                    renderSubs(subs || []);
+                } catch (e) { subsList.innerHTML = '<div class="muted">Failed to load</div>'; console.error(e); }
+            }
+
+            function renderSubs(arr) {
+                subsList.innerHTML = '';
+                if (!arr || arr.length === 0) { subsList.innerHTML = '<div class="muted">No submissions</div>'; return; }
+                arr.forEach(s => {
+                    const row = document.createElement('div');
+                    row.style.display = 'flex'; row.style.justifyContent = 'space-between'; row.style.alignItems = 'center'; row.style.padding = '8px'; row.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
+                    const left = document.createElement('div');
+                    left.innerHTML = `<strong>Team ${s.team_id}</strong><div class="muted">${s.submitted_at}</div>`;
+                    const actions = document.createElement('div');
+                    actions.style.display = 'flex'; actions.style.gap = '8px';
+                    const dl = document.createElement('a'); dl.href = `/submissions/${s.team_id}/${s.filename}`; dl.textContent = 'Download'; dl.className = 'btn btn-ghost'; dl.target = '_blank'; dl.rel = 'noopener noreferrer';
+                    const scoreBtn = document.createElement('button'); scoreBtn.className = 'btn btn-primary'; scoreBtn.textContent = 'Score'; scoreBtn.addEventListener('click', () => openScoreModal(s));
+                    actions.appendChild(dl); actions.appendChild(scoreBtn);
+                    row.appendChild(left); row.appendChild(actions);
+                    subsList.appendChild(row);
+                });
+            }
+
+            function openScoreModal(s) {
+                const points = prompt('Enter points for this submission (integer):');
+                if (points === null) return; const p = parseInt(points);
+                if (isNaN(p)) return alert('Invalid number');
+                // call server to update submission
+                fetch('/api/admin/injects/score', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: s.id, scored: true, score: p, reviewer: 'admin', notes: '' }) }).then(async res => { if (!res.ok) throw new Error(res.statusText); alert('Saved'); await loadSubmissions(); }).catch(e => { alert('Failed'); console.error(e); });
+            }
+
+            subsRefresh.addEventListener('click', loadSubmissions);
+
+            // initial load
+            loadInjects();
         })();
     </script>
     <script>

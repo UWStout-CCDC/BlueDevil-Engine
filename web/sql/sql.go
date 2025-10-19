@@ -195,6 +195,43 @@ func CreateTables() error {
 		return err
 	}
 
+	// injects table
+	injectsTable := `
+	CREATE TABLE IF NOT EXISTS injects (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		inject_id TEXT NOT NULL UNIQUE,
+		title TEXT NOT NULL,
+		description TEXT,
+		filename TEXT,
+		release_time DATETIME,
+		due_time DATETIME,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);`
+
+	injectSubTable := `
+	CREATE TABLE IF NOT EXISTS inject_submissions (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		inject_id TEXT NOT NULL,
+		team_id INTEGER NOT NULL,
+		filename TEXT NOT NULL,
+		submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		scored BOOLEAN DEFAULT 0,
+		score INTEGER,
+		reviewer TEXT,
+		notes TEXT,
+		FOREIGN KEY(team_id) REFERENCES teams(id)
+	);`
+
+	_, err = db.Exec(injectsTable)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(injectSubTable)
+	if err != nil {
+		return err
+	}
+
 	// no separate mapping tables to create
 	return nil
 }
@@ -345,6 +382,128 @@ func GetAllScoringBoxes() ([]structures.ScoringBox, error) {
 		boxes = append(boxes, b)
 	}
 	return boxes, nil
+}
+
+// Inject helpers
+func CreateInject(in *structures.Inject) error {
+	if in == nil {
+		return nil
+	}
+	if in.ID == 0 {
+		// Try insert; if the inject_id already exists, perform an update instead.
+		res, err := db.Exec("INSERT OR IGNORE INTO injects (inject_id, title, description, filename, release_time, due_time) VALUES (?, ?, ?, ?, ?, ?)", in.InjectID, in.Title, in.Description, in.Filename, in.ReleaseTime, in.DueTime)
+		if err != nil {
+			return err
+		}
+		ra, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if ra == 0 {
+			// row existed; perform update by inject_id
+			_, err := db.Exec("UPDATE injects SET title = ?, description = ?, filename = ?, release_time = ?, due_time = ? WHERE inject_id = ?", in.Title, in.Description, in.Filename, in.ReleaseTime, in.DueTime, in.InjectID)
+			if err != nil {
+				return err
+			}
+			// fetch id
+			row := db.QueryRow("SELECT id FROM injects WHERE inject_id = ?", in.InjectID)
+			var id int
+			if err := row.Scan(&id); err == nil {
+				in.ID = id
+			}
+			return nil
+		}
+		last, err := res.LastInsertId()
+		if err == nil {
+			in.ID = int(last)
+		}
+		return nil
+	}
+	_, err := db.Exec("UPDATE injects SET inject_id = ?, title = ?, description = ?, filename = ?, release_time = ?, due_time = ? WHERE id = ?", in.InjectID, in.Title, in.Description, in.Filename, in.ReleaseTime, in.DueTime, in.ID)
+	return err
+}
+
+func GetAllInjects() ([]structures.Inject, error) {
+	rows, err := db.Query("SELECT id, inject_id, title, description, filename, release_time, due_time, created_at FROM injects ORDER BY created_at DESC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []structures.Inject
+	for rows.Next() {
+		var i structures.Inject
+		if err := rows.Scan(&i.ID, &i.InjectID, &i.Title, &i.Description, &i.Filename, &i.ReleaseTime, &i.DueTime, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, i)
+	}
+	return out, nil
+}
+
+func GetInjectByID(injectID string) (*structures.Inject, error) {
+	row := db.QueryRow("SELECT id, inject_id, title, description, filename, release_time, due_time, created_at FROM injects WHERE inject_id = ?", injectID)
+	var i structures.Inject
+	if err := row.Scan(&i.ID, &i.InjectID, &i.Title, &i.Description, &i.Filename, &i.ReleaseTime, &i.DueTime, &i.CreatedAt); err != nil {
+		return nil, err
+	}
+	return &i, nil
+}
+
+// Submissions
+func AddInjectSubmission(sub *structures.InjectSubmission) error {
+	if sub == nil {
+		return nil
+	}
+	res, err := db.Exec("INSERT INTO inject_submissions (inject_id, team_id, filename, scored, score, reviewer, notes) VALUES (?, ?, ?, ?, ?, ?, ?)", sub.InjectID, sub.TeamID, sub.Filename, sub.Scored, sub.Score, sub.Reviewer, sub.Notes)
+	if err != nil {
+		return err
+	}
+	last, err := res.LastInsertId()
+	if err == nil {
+		sub.ID = int(last)
+	}
+	return nil
+}
+
+func GetSubmissionsForInject(injectID string) ([]structures.InjectSubmission, error) {
+	rows, err := db.Query("SELECT id, inject_id, team_id, filename, submitted_at, scored, score, reviewer, notes FROM inject_submissions WHERE inject_id = ? ORDER BY submitted_at DESC", injectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []structures.InjectSubmission
+	for rows.Next() {
+		var s structures.InjectSubmission
+		if err := rows.Scan(&s.ID, &s.InjectID, &s.TeamID, &s.Filename, &s.SubmittedAt, &s.Scored, &s.Score, &s.Reviewer, &s.Notes); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, nil
+}
+
+func UpdateInjectSubmission(sub *structures.InjectSubmission) error {
+	if sub == nil || sub.ID == 0 {
+		return fmt.Errorf("invalid submission")
+	}
+	_, err := db.Exec("UPDATE inject_submissions SET scored = ?, score = ?, reviewer = ?, notes = ? WHERE id = ?", sub.Scored, sub.Score, sub.Reviewer, sub.Notes, sub.ID)
+	return err
+}
+
+// DeleteInjectByInjectID deletes an inject and its associated submissions by inject_id
+func DeleteInjectByInjectID(injectID string) error {
+	if injectID == "" {
+		return nil
+	}
+	// delete submissions first
+	if _, err := db.Exec("DELETE FROM inject_submissions WHERE inject_id = ?", injectID); err != nil {
+		return err
+	}
+	// delete inject record
+	if _, err := db.Exec("DELETE FROM injects WHERE inject_id = ?", injectID); err != nil {
+		return err
+	}
+	return nil
 }
 
 func SaveScoringBox(b *structures.ScoringBox) error {

@@ -58,3 +58,28 @@ type Competition struct {
 	StartedTime   string `json:"started_time,omitempty"`
 	StoppedTime   string `json:"stopped_time,omitempty"`
 }
+
+// Inject represents an inject that can be released during a competition
+type Inject struct {
+	ID          int    `json:"id"`
+	InjectID    string `json:"inject_id"` // short unique identifier
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	Filename    string `json:"filename,omitempty"` // stored PDF filename under /injects/
+	ReleaseTime string `json:"release_time,omitempty"`
+	DueTime     string `json:"due_time,omitempty"`
+	CreatedAt   string `json:"created_at,omitempty"`
+}
+
+// InjectSubmission represents a team's submission for an inject
+type InjectSubmission struct {
+	ID          int    `json:"id"`
+	InjectID    string `json:"inject_id"`
+	TeamID      int    `json:"team_id"`
+	Filename    string `json:"filename"`
+	SubmittedAt string `json:"submitted_at,omitempty"`
+	Scored      bool   `json:"scored,omitempty"`
+	Score       *int   `json:"score,omitempty"`
+	Reviewer    string `json:"reviewer,omitempty"`
+	Notes       string `json:"notes,omitempty"`
+}

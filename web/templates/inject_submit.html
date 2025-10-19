@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Submit Inject</title>
+    <link rel="stylesheet" href="/static/admin.css">
+    <style>
+        body {
+            font-family: Inter, system-ui, Arial;
+            background: #071024;
+            color: #e6eef3;
+            padding: 28px;
+        }
+
+        .card {
+            background: #0b1220;
+            padding: 16px;
+            border-radius: 8px;
+            max-width: 900px;
+            margin: 12px auto;
+        }
+
+        .muted {
+            color: #9aa6b2;
+            font-size: 13px
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px
+        }
+
+        input,
+        select,
+        textarea {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            color: var(--text);
+            padding: 8px;
+            border-radius: 6px
+        }
+
+        .btn {
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <h2>Available Injects</h2>
+        <div id="available" class="muted">Loading released injects...</div>
+    </div>
+
+    <div class="card">
+        <h2>Submit Inject</h2>
+        <div class="muted">Choose an inject and upload your PDF submission. Submissions must be a PDF.</div>
+        <form id="submit-form">
+            <label>Inject
+                <select id="inject-select" style="width:100%"></select>
+            </label>
+            <label>File (PDF)
+                <input id="submit-file" type="file" accept="application/pdf">
+            </label>
+            <div style="margin-top:8px">
+                <button id="submit-btn" class="btn">Submit</button>
+            </div>
+            <div id="submit-msg" class="muted" style="margin-top:8px"></div>
+        </form>
+    </div>
+
+    <script>
+        (function () {
+            const avail = document.getElementById('available');
+            const sel = document.getElementById('inject-select');
+            const form = document.getElementById('submit-form');
+            const finput = document.getElementById('submit-file');
+            const msg = document.getElementById('submit-msg');
+
+            async function loadReleased() {
+                avail.textContent = 'Loading...';
+                try {
+                    const res = await fetch('/api/admin/injects', { credentials: 'same-origin' });
+                    if (!res.ok) throw new Error('failed');
+                    const arr = await res.json();
+                    // filter by release_time <= now if present
+                    const now = new Date();
+                    const released = (arr || []).filter(i => { if (!i.release_time) return true; try { return new Date(i.release_time) <= now } catch (e) { return true } });
+                    if (released.length === 0) { avail.innerHTML = '<div class="muted">No injects released yet</div>'; sel.innerHTML = '<option value="">-- none --</option>'; return }
+                    avail.innerHTML = '';
+                    sel.innerHTML = '';
+                    released.forEach(i => {
+                        const d = document.createElement('div'); d.style.padding = '8px'; d.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
+                        d.innerHTML = `<strong>${i.inject_id} — ${i.title}</strong><div class=\"muted\">${i.description || ''}${i.due_time ? ' | due: ' + i.due_time : ''}</div>`;
+                        avail.appendChild(d);
+                        sel.appendChild(new Option(i.inject_id + ' — ' + i.title, i.inject_id));
+                    });
+                } catch (e) { avail.textContent = 'Failed to load'; console.error(e); }
+            }
+
+            form.addEventListener('submit', async (ev) => {
+                ev.preventDefault(); msg.textContent = '';
+                const inj = sel.value; if (!inj) return alert('Choose inject');
+                if (!finput.files || finput.files.length === 0) return alert('Choose a PDF');
+                const file = finput.files[0];
+                const fd = new FormData(); fd.append('inject_id', inj); fd.append('file', file);
+                try {
+                    const res = await fetch('/api/submit-inject', { method: 'POST', credentials: 'same-origin', body: fd });
+                    if (!res.ok) throw new Error('failed');
+                    const data = await res.json();
+                    msg.textContent = 'Submitted: ' + data.filename;
+                } catch (e) { msg.textContent = 'Submit failed'; console.error(e); }
+            });
+
+            loadReleased();
+        })();
+    </script>
+</body>
+
+</html>

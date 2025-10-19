@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{.Inject.InjectID}} — Inject</title>
+    <style>
+        :root {
+            --bg: #0f1724;
+            --card: #0b1220;
+            --accent: #2dd4bf;
+            --muted: #9aa6b2;
+            --text: #e6eef3;
+            --nav: #071029;
+            --border: rgba(255, 255, 255, 0.06);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+            background: linear-gradient(180deg, #071024 0%, #081827 100%);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        header {
+            background: var(--nav);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02)
+        }
+
+        .brand {
+            font-weight: 700;
+            letter-spacing: 0.4px
+        }
+
+        nav {
+            display: flex;
+            gap: 8px;
+            margin-left: 16px
+        }
+
+        nav a {
+            color: var(--muted);
+            text-decoration: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px
+        }
+
+        <main>
+            <div class="card" style="padding:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+                    <div style="display:flex;gap:12px;align-items:flex-start">
+                        <!-- logo -->
+                        {{/* show logo if available */}}
+                        {{if (index . "LogoPath") }}
+                            <img src="/static/logo.png" alt="logo" style="width:68px;height:auto;margin-top:6px" />
+                        {{else}}
+                            <div style="width:68px"></div>
+                        {{end}}
+                        <div>
+                            <h1 style="margin:0;font-size:28px">{{.Inject.InjectID}} — {{.Inject.Title}}</h1>
+                            <div style="height:8px"></div>
+                            <div style="display:flex;gap:12px;align-items:center">
+                                {{if .Inject.Filename}}
+                                    <a class="btn" href="/injects/{{.Inject.Filename}}" target="_blank">Download Inject PDF</a>
+                                {{else}}
+                                    <div class="muted">No PDF available for this inject</div>
+                                {{end}}
+                                <div class="muted">{{if .Inject.DueTime}}Due: {{.Inject.DueTime}}{{end}}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <a class="btn btn-ghost" href="/injects">← Back to Injects</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="padding:12px;margin-top:8px">
+                <!-- info table moved down and styled like PDF -->
+                <table style="width:100%;border-collapse:collapse;font-size:13px">
+                    <tr>
+                        <td style="width:18%;font-weight:700;background:#f1f7fb;color:#000;padding:8px;border:1px solid #d0d7db;text-transform:uppercase">INJECT NAME</td>
+                        <td style="padding:8px;border:1px solid #d0d7db">{{.Inject.Title}}</td>
+                    </tr>
+                    <tr>
+                        <td style="font-weight:700;background:#f1f7fb;color:#000;padding:8px;border:1px solid #d0d7db;text-transform:uppercase">INJECT ID</td>
+                        <td style="padding:8px;border:1px solid #d0d7db">{{.Inject.InjectID}}</td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="card" style="padding:12px;margin-top:8px">
+                <h2 style="margin-top:4px">INJECT DESCRIPTION:</h2>
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01));
+                <div class="inject-body" style="font-size:13px;line-height:1.45;margin-top:6px">{{.Inject.Description}}</div>
+            </div>
+
+            <div class="card" style="padding:12px;margin-top:8px">
+                <h2 style="margin-top:4px">INJECT DELIVERABLE</h2>
+                <div class="inject-body" style="font-size:13px;line-height:1.45;margin-top:6px">{{if .Inject.Deliverable}}{{.Inject.Deliverable}}{{else}}No deliverable specified{{end}}</div>
+            </div>
+
+            <div class="card" style="padding:12px;margin-top:8px">
+                <h2>Submit Your PDF</h2>
+                {{if .IsLoggedIn}}
+                <form id="submit-form" enctype="multipart/form-data" method="post" action="/api/submit-inject">
+                    <input type="hidden" name="inject_id" value="{{.Inject.InjectID}}">
+                    <label>File (PDF): <input type="file" name="file" accept="application/pdf"></label>
+                    <div style="height:8px"></div>
+                    <button class="btn">Submit</button>
+                    <div class="muted small" style="margin-top:8px">After submission an admin may review and score your submission.</div>
+                </form>
+                {{else}}
+                <div class="muted">You must <a href="/login-user">login</a> to submit.</div>
+                {{end}}
+            </div>
+        </main>
+    </body>
+
+    </html>
+            background: #2dd4bf;
+            color: #012;
+            font-weight: 700;
+            border: none
+        }
+    </style>
+    <link rel="stylesheet" href="/static/admin.css">
+</head>
+
+<body>
+    <header>
+        <div class="brand">BlueDevil Engine</div>
+        <nav aria-label="Main menu">
+            <a href="/" class="{{if eq .Active " scoring"}}active{{end}}">Scoring</a>
+            <a href="/info" class="{{if eq .Active " info"}}active{{end}}">Info</a>
+            <a href="/injects" class="{{if eq .Active " injects"}}active{{end}}">Injects</a>
+            <a href="/practice" class="{{if eq .Active " practice"}}active{{end}}">Practice</a>
+            {{if .IsAdmin}}<a href="/admin/">Admin</a>{{end}}
+        </nav>
+        <div class="spacer"></div>
+        <div class="auth">
+            {{if .IsLoggedIn}}
+            <a href="/logout" title="Logout">{{.UserName}} (logout)</a>
+            {{else}}
+            <a href="/login-user" title="Login">Login</a>
+            {{end}}
+        </div>
+    </header>
+
+    <main>
+        <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                <div>
+                    <h1>{{.Inject.InjectID}} — {{.Inject.Title}}</h1>
+                </div>
+                <div style="margin-left:12px">
+                    <a class="btn btn-ghost" href="/injects">← Back to Injects</a>
+                </div>
+            </div>
+            <div class="muted">{{.Inject.Description}}</div>
+            <div style="height:12px"></div>
+            <div style="display:flex;gap:12px;align-items:center">
+                {{if .Inject.Filename}}
+                <a class="btn" href="/injects/{{.Inject.Filename}}" target="_blank">Download Inject PDF</a>
+                {{else}}
+                <div class="muted">No PDF available for this inject</div>
+                {{end}}
+                <div class="muted">{{if .Inject.DueTime}}Due: {{.Inject.DueTime}}{{end}}</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Submit Your PDF</h2>
+            {{if .IsLoggedIn}}
+            <form id="submit-form" enctype="multipart/form-data" method="post" action="/injects/submit-inject">
+                <input type="hidden" name="inject_id" value="{{.Inject.InjectID}}">
+                <label>File (PDF): <input type="file" name="file" accept="application/pdf"></label>
+                <div style="height:8px"></div>
+                <button class="btn">Submit</button>
+                <div class="muted small" style="margin-top:8px">After submission an admin may review and score your
+                    submission.</div>
+            </form>
+            {{else}}
+            <div class="muted">You must <a href="/login-user">login</a> to submit.</div>
+            {{end}}
+        </div>
+    </main>
+</body>
+
+</html>

@@ -31,6 +31,9 @@ envinfo.json
 # Database files
 *.db
 
+web/injects/*.pdf
+web/submissions/*
+
 # Editor/IDE
 # .idea/
 # .vscode/
