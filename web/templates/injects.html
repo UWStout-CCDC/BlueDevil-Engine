@@ -93,7 +93,7 @@
     <link rel="stylesheet" href="/static/admin.css">
 </head>
 
-<body>
+<body data-is-admin="{{.IsAdmin}}">
     <header>
         <div class="brand">BlueDevil Engine</div>
         <nav aria-label="Main menu">
@@ -121,13 +121,12 @@
             {{if .Injects}}
             <div style="display:grid;gap:10px">
                 {{range .Injects}}
-                <div
-                    style="padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);display:flex;justify-content:space-between;align-items:center">
+                <div style="padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);display:flex;justify-content:space-between;align-items:center"
+                    data-release="{{.ReleaseTime}}" data-duetime="{{.DueTime}}">
                     <div>
                         <a href="/injects/{{.InjectID}}"
                             style="color:var(--accent);font-weight:700;text-decoration:none">{{.InjectID}} —
                             {{.Title}}</a>
-                        <div class="muted" style="font-size:13px">{{.Description}}</div>
                     </div>
                     <div class="muted small">{{if .DueTime}}Due: {{.DueTime}}{{end}}</div>
                 </div>
@@ -138,6 +137,59 @@
             {{end}}
         </div>
     </main>
+    <script>
+        (function () {
+            // If server says user is admin, no client filtering needed
+            const isAdmin = document.body.getAttribute('data-is-admin') === 'true';
+            if (isAdmin) return;
+
+            async function hideUnreleased() {
+                let compStart = null;
+                try {
+                    const r = await fetch('/api/admin/competition', { credentials: 'same-origin' });
+                    if (r.ok) {
+                        const c = await r.json();
+                        if (c && c.started_time) compStart = new Date(c.started_time);
+                    }
+                } catch (e) { /* ignore - hide by default */ }
+
+                const now = new Date();
+                const items = document.querySelectorAll('[data-release]');
+                let anyVisible = false;
+                items.forEach(it => {
+                    const rel = it.getAttribute('data-release');
+                    if (!rel || rel === '0') {
+                        it.style.display = '';
+                        anyVisible = true;
+                        return;
+                    }
+                    if (compStart) {
+                        const mins = parseInt(rel, 10);
+                        if (!isNaN(mins)) {
+                            const relDt = new Date(compStart.getTime() + mins * 60000);
+                            if (relDt <= now) {
+                                it.style.display = '';
+                                anyVisible = true;
+                                return;
+                            }
+                        }
+                    }
+                    // otherwise hide
+                    it.style.display = 'none';
+                });
+                if (!anyVisible) {
+                    const container = document.querySelector('main .card');
+                    if (container) {
+                        const msg = document.createElement('div');
+                        msg.className = 'muted';
+                        msg.textContent = 'No injects are currently released';
+                        container.appendChild(msg);
+                    }
+                }
+            }
+            hideUnreleased();
+        })();
+    </script>
 </body>
 
 </html>

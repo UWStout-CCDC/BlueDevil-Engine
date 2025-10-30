@@ -1381,8 +1381,14 @@
                             rows="3" style="width:100%"></textarea></label>
                 </div>
                 <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
-                    <label>Release time<br><input id="inj-release" type="datetime-local" style="width:220px"></label>
-                    <label>Due time<br><input id="inj-due" type="datetime-local" style="width:220px"></label>
+                    <label>Release offset (minutes)<br><input id="inj-release" type="number" min="0" value="0"
+                            style="width:140px"></label>
+                    <label>Due offset (minutes)<br><input id="inj-due" type="number" min="0" value="60"
+                            style="width:140px"></label>
+                    <div style="margin-left:12px;align-self:flex-start">
+                        <div class="muted">Competition:</div>
+                        <div id="inj-comp-status" class="muted">Loading...</div>
+                    </div>
                     <button id="inj-create" class="btn btn-primary">Create Inject</button>
                     <label style="margin-left:8px">Upload PDF<br><input id="inj-file" type="file"
                             accept="application/pdf"></label>
@@ -1532,6 +1538,42 @@
                 } catch (e) { listDiv.textContent = 'Failed to load injects'; console.error(e); }
             }
 
+            // track competition started time globally inside this module so renderInjects can use it
+            let compStarted = null;
+
+            // Load competition status for inject creation form
+            async function loadCompetitionStatus() {
+                const el = document.getElementById('inj-comp-status');
+                try {
+                    const r = await fetch('/api/admin/competition', { credentials: 'same-origin' });
+                    if (!r.ok) throw new Error(r.statusText);
+                    const comp = await r.json();
+                    if (comp.status === 'running' && comp.started_time) {
+                        const started = new Date(comp.started_time);
+                        compStarted = started;
+                        const now = new Date();
+                        const mins = Math.floor((now - started) / 60000);
+                        const hrs = Math.floor(mins / 60);
+                        const mm = String(mins % 60).padStart(2, '0');
+                        el.textContent = `Running — ${hrs}:${mm} (H:MM)`;
+                    } else if (comp.status === 'scheduled' && comp.scheduled_time) {
+                        compStarted = null;
+                        el.textContent = `Scheduled at ${comp.scheduled_time}`;
+                    } else {
+                        compStarted = null;
+                        el.textContent = 'Competition stopped';
+                    }
+                } catch (e) {
+                    compStarted = null;
+                    el.textContent = 'Unknown';
+                    console.error('Failed to load competition status', e);
+                }
+            }
+
+            // refresh comp status periodically
+            loadCompetitionStatus();
+            setInterval(loadCompetitionStatus, 30 * 1000);
+
             function renderInjects(arr) {
                 listDiv.innerHTML = '';
                 subsInject.innerHTML = '';
@@ -1542,10 +1584,75 @@
                     row.style.padding = '8px';
                     const title = document.createElement('strong');
                     title.textContent = `${i.inject_id} — ${i.title}`;
+                    // meta/description removed per request (keep only timestamps)
                     const meta = document.createElement('div');
                     meta.className = 'muted';
                     meta.style.marginTop = '6px';
-                    meta.textContent = `${i.description || ''} ${i.release_time ? ' | release: ' + i.release_time : ''} ${i.due_time ? ' | due: ' + i.due_time : ''}`;
+                    // format release_time to HH:MM — support minute offsets (integers) relative to competition start
+                    function fmtHM(ts) {
+                        if (ts === null || ts === undefined || ts === '') return '';
+                        // If numeric (minutes offset), format relative to compStarted if available
+                        const n = parseInt(ts, 10);
+                        if (!isNaN(n)) {
+                            if (compStarted) {
+                                try {
+                                    const d = new Date(new Date(compStarted).getTime() + (n * 60000));
+                                    const hh = String(d.getHours()).padStart(2, '0');
+                                    const mm = String(d.getMinutes()).padStart(2, '0');
+                                    return `${hh}:${mm}`;
+                                } catch (e) {
+                                    return `${n} min after start`;
+                                }
+                            }
+                            return `${n} min after start`;
+                        }
+                        try {
+                            const d = new Date(ts);
+                            if (isNaN(d)) {
+                                if (typeof ts === 'string' && /^\d{1,2}:\d{2}$/.test(ts)) return ts;
+                                return ts;
+                            }
+                            const hh = String(d.getHours()).padStart(2, '0');
+                            const mm = String(d.getMinutes()).padStart(2, '0');
+                            return `${hh}:${mm}`;
+                        } catch (e) {
+                            return ts;
+                        }
+                    }
+
+                    (function () {
+                        // show release/due and compute duration if possible
+                        const rel = i.release_time;
+                        const due = i.due_time;
+                        const relText = rel ? 'release: ' + fmtHM(rel) : '';
+                        const dueText = due ? (relText ? ' | due: ' + fmtHM(due) : 'due: ' + fmtHM(due)) : '';
+
+                        let deltaText = '';
+                        if (rel && due) {
+                            // try integer minutes first
+                            const rNum = parseInt(rel, 10);
+                            const dNum = parseInt(due, 10);
+                            if (!isNaN(rNum) && !isNaN(dNum)) {
+                                const diffM = Math.abs(dNum - rNum);
+                                const hrs = Math.floor(diffM / 60);
+                                const mins = diffM % 60;
+                                deltaText = ` | length: ${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+                            } else {
+                                try {
+                                    const r = new Date(rel);
+                                    const d = new Date(due);
+                                    if (!isNaN(r) && !isNaN(d)) {
+                                        let diff = Math.abs(d - r);
+                                        const hrs = Math.floor(diff / 3600000);
+                                        const mins = Math.floor((diff % 3600000) / 60000);
+                                        deltaText = ` | length: ${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+                                    }
+                                } catch (e) { /* ignore parse errors */ }
+                            }
+                        }
+
+                        meta.textContent = `${relText}${dueText}${deltaText}`;
+                    })();
                     const actions = document.createElement('div');
                     actions.style.display = 'flex'; actions.style.gap = '8px'; actions.style.marginTop = '8px';
                     const dl = document.createElement('a'); dl.href = '/injects/' + (i.filename || ''); dl.textContent = 'Download'; dl.className = 'btn btn-ghost';
@@ -1572,11 +1679,11 @@
                 const injId = document.getElementById('inj-id').value.trim();
                 const title = document.getElementById('inj-title').value.trim();
                 const desc = document.getElementById('inj-desc').value.trim();
-                const release = document.getElementById('inj-release').value;
-                const due = document.getElementById('inj-due').value;
+                const release = parseInt(document.getElementById('inj-release').value || '0', 10);
+                const due = parseInt(document.getElementById('inj-due').value || '0', 10);
                 if (!injId || !title) return alert('inject id and title required');
                 try {
-                    const res = await fetch('/api/admin/injects', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inject_id: injId, title, description: desc, release_time: release || null, due_time: due || null }) });
+                    const res = await fetch('/api/admin/injects', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inject_id: injId, title, description: desc, release_offset_minutes: release, due_offset_minutes: due }) });
                     if (!res.ok) throw new Error(res.statusText);
                     msgDiv.textContent = 'Inject created';
                     // If a file is selected, upload it; otherwise generate PDF from description + deliverable

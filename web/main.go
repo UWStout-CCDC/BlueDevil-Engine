@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"crypto/rand"
 	"encoding/base64"
@@ -184,8 +185,43 @@ func main() {
 	http.Handle("/api/admin/injects/score", AuthMiddleware(AdminAuthMiddleware(http.HandlerFunc(webpages.HandleApiInjectScore))))
 
 	// Serve injects pages and PDF files via our handler
+	http.Handle("/injects", AuthPromptMiddleware(http.HandlerFunc(webpages.HandleInjectsRoot)))
 	http.Handle("/injects/", AuthPromptMiddleware(http.HandlerFunc(webpages.HandleInjectsRoot)))
-	http.Handle("/submissions/", http.StripPrefix("/submissions/", http.FileServer(http.Dir("submissions"))))
+	http.HandleFunc("/submissions/", func(w http.ResponseWriter, r *http.Request) {
+		// Expect paths like /submissions/<filename>
+		const prefix = "/submissions/"
+		if !strings.HasPrefix(r.URL.Path, prefix) {
+			http.NotFound(w, r)
+			return
+		}
+		rel := r.URL.Path[len(prefix):]
+		// Do not serve directories or empty paths
+		if rel == "" || rel[len(rel)-1] == '/' {
+			http.NotFound(w, r)
+			return
+		}
+		// Simple traversal protection: reject any path containing ".."
+		hasDotDot := false
+		for i := 0; i+1 < len(rel); i++ {
+			if rel[i] == '.' && rel[i+1] == '.' {
+				hasDotDot = true
+				break
+			}
+		}
+		if hasDotDot {
+			http.NotFound(w, r)
+			return
+		}
+
+		fullPath := "submissions/" + rel
+		info, err := os.Stat(fullPath)
+		if err != nil || info.IsDir() {
+			http.NotFound(w, r)
+			return
+		}
+
+		http.ServeFile(w, r, fullPath)
+	})
 	// User submission endpoint (authenticated users)
 	http.Handle("/injects/submit-inject", AuthPromptMiddleware(http.HandlerFunc(webpages.HandleApiSubmitInject)))
 

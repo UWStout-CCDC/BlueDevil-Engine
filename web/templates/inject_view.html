@@ -102,7 +102,7 @@
     <link rel="stylesheet" href="/static/admin.css">
 </head>
 
-<body>
+<body data-is-admin="{{.IsAdmin}}">
     <header>
         <div class="brand">BlueDevil Engine</div>
         <nav aria-label="Main menu">
@@ -134,7 +134,7 @@
             </div>
             <div class="muted">{{.Inject.Description}}</div>
             <div style="height:12px"></div>
-            <div style="display:flex;gap:12px;align-items:center">
+            <div style="display:flex;gap:12px;align-items:center" data-release="{{.Inject.ReleaseTime}}">
                 {{if .Inject.Filename}}
                 <a class="btn" href="/injects/{{.Inject.Filename}}" target="_blank">Download Inject PDF</a>
                 {{else}}
@@ -160,6 +160,32 @@
             {{end}}
         </div>
     </main>
+    <script>
+        (function () {
+            const isAdmin = document.body.getAttribute('data-is-admin') === 'true';
+            if (isAdmin) return;
+            const relAttr = document.querySelector('[data-release]')?.getAttribute('data-release');
+            if (!relAttr || relAttr === '0') return; // immediately visible
+            (async function () {
+                try {
+                    const r = await fetch('/api/admin/competition', { credentials: 'same-origin' });
+                    if (!r.ok) { window.location.href = '/injects'; return; }
+                    const c = await r.json();
+                    if (!c || !c.started_time) { window.location.href = '/injects'; return; }
+                    const compStart = new Date(c.started_time);
+                    const mins = parseInt(relAttr, 10);
+                    if (isNaN(mins)) { window.location.href = '/injects'; return; }
+                    const relDt = new Date(compStart.getTime() + mins * 60000);
+                    if (relDt > new Date()) {
+                        // not yet released - redirect
+                        window.location.href = '/injects';
+                    }
+                } catch (e) {
+                    window.location.href = '/injects';
+                }
+            })();
+        })();
+    </script>
 </body>
 
 </html>

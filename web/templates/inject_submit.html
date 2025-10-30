@@ -87,9 +87,47 @@
                     const res = await fetch('/api/admin/injects', { credentials: 'same-origin' });
                     if (!res.ok) throw new Error('failed');
                     const arr = await res.json();
-                    // filter by release_time <= now if present
+                    // filter by release_time (minutes after competition start) <= now
                     const now = new Date();
-                    const released = (arr || []).filter(i => { if (!i.release_time) return true; try { return new Date(i.release_time) <= now } catch (e) { return true } });
+                    // fetch competition start time synchronously from server
+                    let compStart = null;
+                    let compStatus = null;
+                    try {
+                        const cres = await fetch('/api/admin/competition', { credentials: 'same-origin' });
+                        if (cres.ok) {
+                            const cobj = await cres.json();
+                            compStatus = cobj && cobj.status;
+                            if (cobj && cobj.started_time) {
+                                compStart = new Date(cobj.started_time);
+                            }
+                        }
+                    } catch (e) { /* ignore */ }
+
+                    const released = (arr || []).filter(i => {
+                        // If no release_time set, treat as immediately available
+                        if (!i.release_time) return true;
+
+                        // If competition has started and compStart exists, compute release datetime
+                        if (compStart) {
+                            try {
+                                const rel = new Date(compStart.getTime() + (parseInt(i.release_time) * 60000));
+                                return rel <= now;
+                            } catch (e) { return false }
+                        }
+
+                        // If competition hasn't started (no compStart), hide any injects that have a release_time set
+                        return false;
+                    });
+                    // If competition not running/started and there are no immediately-available injects, give informative message
+                    if ((!compStart || compStatus !== 'running') && released.length === 0) {
+                        if (compStatus === 'scheduled') {
+                            avail.innerHTML = '<div class="muted">Competition scheduled — injects will be released after start</div>';
+                        } else {
+                            avail.innerHTML = '<div class="muted">No injects are currently released</div>';
+                        }
+                        sel.innerHTML = '<option value="">-- none --</option>';
+                        return;
+                    }
                     if (released.length === 0) { avail.innerHTML = '<div class="muted">No injects released yet</div>'; sel.innerHTML = '<option value="">-- none --</option>'; return }
                     avail.innerHTML = '';
                     sel.innerHTML = '';

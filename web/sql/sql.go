@@ -203,8 +203,8 @@ func CreateTables() error {
 		title TEXT NOT NULL,
 		description TEXT,
 		filename TEXT,
-		release_time DATETIME,
-		due_time DATETIME,
+		release_time INTEGER DEFAULT NULL,
+		due_time INTEGER DEFAULT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);`
 
@@ -391,7 +391,7 @@ func CreateInject(in *structures.Inject) error {
 	}
 	if in.ID == 0 {
 		// Try insert; if the inject_id already exists, perform an update instead.
-		res, err := db.Exec("INSERT OR IGNORE INTO injects (inject_id, title, description, filename, release_time, due_time) VALUES (?, ?, ?, ?, ?, ?)", in.InjectID, in.Title, in.Description, in.Filename, in.ReleaseTime, in.DueTime)
+		res, err := db.Exec("INSERT OR IGNORE INTO injects (inject_id, title, description, filename, release_time, due_time, release_offset_minutes, due_offset_minutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", in.InjectID, in.Title, in.Description, in.Filename, in.ReleaseTime, in.DueTime, in.ReleaseOffsetMinutes, in.DueOffsetMinutes)
 		if err != nil {
 			return err
 		}
@@ -401,7 +401,7 @@ func CreateInject(in *structures.Inject) error {
 		}
 		if ra == 0 {
 			// row existed; perform update by inject_id
-			_, err := db.Exec("UPDATE injects SET title = ?, description = ?, filename = ?, release_time = ?, due_time = ? WHERE inject_id = ?", in.Title, in.Description, in.Filename, in.ReleaseTime, in.DueTime, in.InjectID)
+			_, err := db.Exec("UPDATE injects SET title = ?, description = ?, filename = ?, release_time = ?, due_time = ?, release_offset_minutes = ?, due_offset_minutes = ? WHERE inject_id = ?", in.Title, in.Description, in.Filename, in.ReleaseTime, in.DueTime, in.ReleaseOffsetMinutes, in.DueOffsetMinutes, in.InjectID)
 			if err != nil {
 				return err
 			}
@@ -419,12 +419,12 @@ func CreateInject(in *structures.Inject) error {
 		}
 		return nil
 	}
-	_, err := db.Exec("UPDATE injects SET inject_id = ?, title = ?, description = ?, filename = ?, release_time = ?, due_time = ? WHERE id = ?", in.InjectID, in.Title, in.Description, in.Filename, in.ReleaseTime, in.DueTime, in.ID)
+	_, err := db.Exec("UPDATE injects SET inject_id = ?, title = ?, description = ?, filename = ?, release_time = ?, due_time = ?, release_offset_minutes = ?, due_offset_minutes = ? WHERE id = ?", in.InjectID, in.Title, in.Description, in.Filename, in.ReleaseTime, in.DueTime, in.ReleaseOffsetMinutes, in.DueOffsetMinutes, in.ID)
 	return err
 }
 
 func GetAllInjects() ([]structures.Inject, error) {
-	rows, err := db.Query("SELECT id, inject_id, title, description, filename, release_time, due_time, created_at FROM injects ORDER BY created_at DESC")
+	rows, err := db.Query("SELECT id, inject_id, title, description, filename, release_time, due_time, release_offset_minutes, due_offset_minutes, created_at FROM injects ORDER BY created_at DESC")
 	if err != nil {
 		return nil, err
 	}
@@ -432,8 +432,20 @@ func GetAllInjects() ([]structures.Inject, error) {
 	var out []structures.Inject
 	for rows.Next() {
 		var i structures.Inject
-		if err := rows.Scan(&i.ID, &i.InjectID, &i.Title, &i.Description, &i.Filename, &i.ReleaseTime, &i.DueTime, &i.CreatedAt); err != nil {
+		var release sql.NullInt64
+		var due sql.NullInt64
+		if err := rows.Scan(&i.ID, &i.InjectID, &i.Title, &i.Description, &i.Filename, &release, &due, &i.ReleaseOffsetMinutes, &i.DueOffsetMinutes, &i.CreatedAt); err != nil {
 			return nil, err
+		}
+		if release.Valid {
+			i.ReleaseTime = int(release.Int64)
+		} else {
+			i.ReleaseTime = 0
+		}
+		if due.Valid {
+			i.DueTime = int(due.Int64)
+		} else {
+			i.DueTime = 0
 		}
 		out = append(out, i)
 	}
@@ -441,10 +453,22 @@ func GetAllInjects() ([]structures.Inject, error) {
 }
 
 func GetInjectByID(injectID string) (*structures.Inject, error) {
-	row := db.QueryRow("SELECT id, inject_id, title, description, filename, release_time, due_time, created_at FROM injects WHERE inject_id = ?", injectID)
+	row := db.QueryRow("SELECT id, inject_id, title, description, filename, release_time, due_time, release_offset_minutes, due_offset_minutes, created_at FROM injects WHERE inject_id = ?", injectID)
 	var i structures.Inject
-	if err := row.Scan(&i.ID, &i.InjectID, &i.Title, &i.Description, &i.Filename, &i.ReleaseTime, &i.DueTime, &i.CreatedAt); err != nil {
+	var release sql.NullInt64
+	var due sql.NullInt64
+	if err := row.Scan(&i.ID, &i.InjectID, &i.Title, &i.Description, &i.Filename, &release, &due, &i.ReleaseOffsetMinutes, &i.DueOffsetMinutes, &i.CreatedAt); err != nil {
 		return nil, err
+	}
+	if release.Valid {
+		i.ReleaseTime = int(release.Int64)
+	} else {
+		i.ReleaseTime = 0
+	}
+	if due.Valid {
+		i.DueTime = int(due.Int64)
+	} else {
+		i.DueTime = 0
 	}
 	return &i, nil
 }

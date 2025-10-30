@@ -43,20 +43,23 @@ func HandleInjectsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// filter to released only (release_time <= now) if release_time set
+	// filter to released only (ReleaseTime is minutes after competition start)
 	now := time.Now().UTC()
+	comp, _ := sql_wrapper.GetCompetition()
+
 	visible := []structures.Inject{}
 	for _, in := range injects {
-		if in.ReleaseTime == "" {
-			visible = append(visible, in)
-			continue
-		}
-		// try parse RFC3339, fall back to visible on parse error
-		if t, err := time.Parse(time.RFC3339, in.ReleaseTime); err == nil {
-			if !t.After(now) {
-				visible = append(visible, in)
+		// Admins should see everything
+		var isAdminLocal bool
+		if u := r.Context().Value(CtxUserKey); u != nil {
+			switch v := u.(type) {
+			case structures.User:
+				isAdminLocal = v.Is_Admin
+			case *structures.User:
+				isAdminLocal = v.Is_Admin
 			}
-		} else {
+		}
+		if injectVisibleToUser(&in, comp, now, isAdminLocal) {
 			visible = append(visible, in)
 		}
 	}
@@ -110,6 +113,22 @@ func HandleInjectViewPage(w http.ResponseWriter, r *http.Request, injectID strin
 		return
 	}
 
+	// enforce visibility: non-admins cannot view unreleased injects
+	var isAdminLocal bool
+	if u := r.Context().Value(CtxUserKey); u != nil {
+		switch v := u.(type) {
+		case structures.User:
+			isAdminLocal = v.Is_Admin
+		case *structures.User:
+			isAdminLocal = v.Is_Admin
+		}
+	}
+	comp, _ := sql_wrapper.GetCompetition()
+	if !injectVisibleToUser(in, comp, time.Now().UTC(), isAdminLocal) {
+		http.NotFound(w, r)
+		return
+	}
+
 	data := map[string]interface{}{
 		"Active":     "injects",
 		"IsAdmin":    isAdmin,
@@ -139,7 +158,7 @@ func HandleInjectViewPage(w http.ResponseWriter, r *http.Request, injectID strin
 func HandleInjectsRoot(w http.ResponseWriter, r *http.Request) {
 	// Trim the prefix to get the remainder
 	p := strings.TrimPrefix(r.URL.Path, "/injects/")
-	if p == "" || p == "/" {
+	if p == "" || p == "/" || p == "/injects" {
 		HandleInjectsPage(w, r)
 		return
 	}
@@ -207,6 +226,23 @@ func HandleApiSubmitInject(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Ensure the inject is visible to this user (don't allow submitting for unreleased injects)
+	inj, _ := sql_wrapper.GetInjectByID(injectID)
+	comp, _ := sql_wrapper.GetCompetition()
+	var isAdminLocal bool
+	if u := r.Context().Value(CtxUserKey); u != nil {
+		switch v := u.(type) {
+		case structures.User:
+			isAdminLocal = v.Is_Admin
+		case *structures.User:
+			isAdminLocal = v.Is_Admin
+		}
+	}
+	if !injectVisibleToUser(inj, comp, time.Now().UTC(), isAdminLocal) {
+		http.Error(w, "inject not available", http.StatusForbidden)
+		return
+	}
+
 	// ensure submissions dir exists
 	dir := fmt.Sprintf("submissions/%d", teamID)
 	if err := ensureDir(dir); err != nil {
@@ -243,4 +279,35 @@ func HandleApiSubmitInject(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"id": sub.ID, "filename": fn, "path": outPath, "original": header.Filename})
+}
+
+// injectVisibleToUser returns true if the inject should be visible to a non-admin user
+// given the competition state and current time. Admins should bypass this check.
+func injectVisibleToUser(in *structures.Inject, comp *structures.Competition, now time.Time, isAdmin bool) bool {
+	if in == nil {
+		return false
+	}
+	if isAdmin {
+		return true
+	}
+
+	// If ReleaseTime is zero, it's immediately visible
+	if in.ReleaseTime == 0 {
+		return true
+	}
+
+	// If competition has a started_time, interpret ReleaseTime as minutes after start
+	if comp != nil && comp.StartedTime != "" {
+		if t, err := time.Parse(time.RFC3339, comp.StartedTime); err == nil {
+			release := t.UTC().Add(time.Duration(in.ReleaseTime) * time.Minute)
+			if !release.After(now) {
+				return true
+			}
+			return false
+		}
+	}
+
+	// If competition isn't started (no valid started_time), hide future releases.
+	// We treat the inject as unreleased until a competition start is known.
+	return false
 }

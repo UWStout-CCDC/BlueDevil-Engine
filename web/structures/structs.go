@@ -66,9 +66,12 @@ type Inject struct {
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`
 	Filename    string `json:"filename,omitempty"` // stored PDF filename under /injects/
-	ReleaseTime string `json:"release_time,omitempty"`
-	DueTime     string `json:"due_time,omitempty"`
-	CreatedAt   string `json:"created_at,omitempty"`
+	// ReleaseTime and DueTime are minutes after competition start (integer)
+	ReleaseTime          int    `json:"release_time,omitempty"`
+	DueTime              int    `json:"due_time,omitempty"`
+	ReleaseOffsetMinutes int    `json:"release_offset_minutes,omitempty"`
+	DueOffsetMinutes     int    `json:"due_offset_minutes,omitempty"`
+	CreatedAt            string `json:"created_at,omitempty"`
 }
 
 // InjectSubmission represents a team's submission for an inject
